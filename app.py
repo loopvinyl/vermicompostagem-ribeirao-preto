@@ -15,7 +15,7 @@ st.title("♻️ Vermicompostagem nas Escolas de Ribeirão Preto")
 st.markdown("**Monitoramento do sistema de compostagem com minhocas**")
 
 # URL DO EXCEL NO GITHUB - ATUALIZE COM SUA URL!
-URL_EXCEL = "https://github.com/SEU_USUARIO/vermicompostagem-ribeirao-preto/raw/main/dados_vermicompostagem.xlsx"
+URL_EXCEL = "https://github.com/loopvinyl/vermicompostagem-ribeirao-preto/blob/main/dados_vermicompostagem.xlsx"
 
 @st.cache_data
 def carregar_dados(url):
