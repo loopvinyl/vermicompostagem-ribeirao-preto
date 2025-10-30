@@ -26,22 +26,27 @@ def carregar_dados(url):
         
         st.success(f"✅ Dados carregados: {len(df_escolas)} escolas e {len(df_caixas)} caixas")
         
-        # Converter colunas de data se existirem
-        if 'data_implantacao' in df_escolas.columns:
-            df_escolas['data_implantacao'] = pd.to_datetime(df_escolas['data_implantacao'], errors='coerce')
-        if 'ultima_visita' in df_escolas.columns:
-            df_escolas['ultima_visita'] = pd.to_datetime(df_escolas['ultima_visita'], errors='coerce')
-            
-        if 'data_ativacao' in df_caixas.columns:
-            df_caixas['data_ativacao'] = pd.to_datetime(df_caixas['data_ativacao'], errors='coerce')
-        if 'data_encheu' in df_caixas.columns:
-            df_caixas['data_encheu'] = pd.to_datetime(df_caixas['data_encheu'], errors='coerce')
-                
         return df_escolas, df_caixas
         
     except Exception as e:
         st.error(f"❌ Erro ao carregar dados: {e}")
         return None, None
+
+# Função segura para calcular dias
+def calcular_dias_desde_encheu(data_encheu):
+    """Calcula dias desde que encheu de forma segura"""
+    if pd.isna(data_encheu):
+        return None
+    try:
+        if isinstance(data_encheu, str):
+            data_encheu = pd.to_datetime(data_encheu, errors='coerce')
+        if pd.isna(data_encheu):
+            return None
+        hoje = datetime.now().date()
+        data_encheu_date = data_encheu.date()
+        return (hoje - data_encheu_date).days
+    except:
+        return None
 
 # Carregar dados
 df_escolas, df_caixas = carregar_dados(URL_EXCEL)
@@ -75,36 +80,41 @@ if df_escolas is not None and df_caixas is not None:
         else:
             st.metric("🕒 Status", "N/A")
 
-    # ===== CALCULAR ALERTAS =====
+    # ===== CALCULAR ALERTAS DE FORMA SEGURA =====
     if 'data_encheu' in df_caixas.columns and 'status_caixa' in df_caixas.columns:
-        hoje = datetime.now().date()
+        # Calcular dias para cada caixa cheia
+        alertas_urgentes = []
+        alertas_proximos = []
         
-        # Caixas cheias não colhidas
-        caixas_cheias = df_caixas[
-            (df_caixas['status_caixa'] == 'Cheia') & 
-            (df_caixas['data_encheu'].notna())
-        ].copy()
+        for _, caixa in df_caixas.iterrows():
+            if caixa['status_caixa'] == 'Cheia' and pd.notna(caixa['data_encheu']):
+                dias = calcular_dias_desde_encheu(caixa['data_encheu'])
+                if dias is not None:
+                    escola_nome = df_escolas[df_escolas['id_escola'] == caixa['id_escola']]['nome_escola'].iloc[0]
+                    
+                    if dias > 50:
+                        alertas_urgentes.append({
+                            'escola': escola_nome,
+                            'caixa': caixa['numero_caixa'],
+                            'dias': dias
+                        })
+                    elif dias >= 45:
+                        alertas_proximos.append({
+                            'escola': escola_nome,
+                            'caixa': caixa['numero_caixa'],
+                            'dias': dias
+                        })
         
-        if not caixas_cheias.empty:
-            caixas_cheias['dias_desde_encheu'] = (
-                hoje - caixas_cheias['data_encheu'].dt.date
-            ).dt.days
-            
-            alertas_urgentes = caixas_cheias[caixas_cheias['dias_desde_encheu'] > 50]
-            alertas_proximos = caixas_cheias[caixas_cheias['dias_desde_encheu'] >= 45]
-            
-            # Mostrar alertas
-            if not alertas_urgentes.empty:
-                st.error("🚨 **ALERTAS URGENTES - Caixas com mais de 50 dias cheias:**")
-                for _, caixa in alertas_urgentes.iterrows():
-                    escola_nome = df_escolas[df_escolas['id_escola'] == caixa['id_escola']]['nome_escola'].iloc[0]
-                    st.write(f"- **{escola_nome}** - Caixa {caixa['numero_caixa']}: {caixa['dias_desde_encheu']} dias cheia")
-            
-            if not alertas_proximos.empty and alertas_urgentes.empty:
-                st.warning("⚠️ **Caixas próximas da colheita (45+ dias):**")
-                for _, caixa in alertas_proximos.iterrows():
-                    escola_nome = df_escolas[df_escolas['id_escola'] == caixa['id_escola']]['nome_escola'].iloc[0]
-                    st.write(f"- **{escola_nome}** - Caixa {caixa['numero_caixa']}: {caixa['dias_desde_encheu']} dias")
+        # Mostrar alertas
+        if alertas_urgentes:
+            st.error("🚨 **ALERTAS URGENTES - Caixas com mais de 50 dias cheias:**")
+            for alerta in alertas_urgentes:
+                st.write(f"- **{alerta['escola']}** - Caixa {alerta['caixa']}: {alerta['dias']} dias cheia")
+        
+        if alertas_proximos and not alertas_urgentes:
+            st.warning("⚠️ **Caixas próximas da colheita (45+ dias):**")
+            for alerta in alertas_proximos:
+                st.write(f"- **{alerta['escola']}** - Caixa {alerta['caixa']}: {alerta['dias']} dias")
 
     # ===== FILTROS =====
     st.sidebar.header("🔍 Filtros")
@@ -173,7 +183,7 @@ else:
     
     1. ✅ O arquivo Excel existe no GitHub
     2. ✅ As abas se chamam 'escolas' e 'caixas'
-    3. ✅ A URL está correta: https://github.com/loopvinyl/vermicompostagem-ribeirao-preto/raw/main/dados_vermicompostagem.xlsx
+    3. ✅ A URL está correta
     4. ✅ O arquivo não está corrompido
     """)
 
@@ -182,4 +192,6 @@ st.sidebar.markdown("---")
 st.sidebar.info("""
 **📊 Fonte dos dados:**
 [GitHub - Vermicompostagem Ribeirão Preto](https://github.com/loopvinyl/vermicompostagem-ribeirao-preto)
+
+**🔄 Atualização:** Os dados são atualizados automaticamente quando o Excel no GitHub é modificado.
 """)
