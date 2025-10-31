@@ -328,7 +328,7 @@ with col3:
     """)
 
 # =============================================================================
-# CÁLCULOS DETALHADOS DAS EMISSÕES
+# CÁLCULOS DETALHADOS DAS EMISSÕES - COMPOSTAGEM COM MINHOCAS
 # =============================================================================
 
 # Parâmetros fixos para cálculos de emissões
@@ -343,26 +343,36 @@ Ri = 0.0  # Metano recuperado
 GWP_CH4_20 = 79.7
 GWP_N2O_20 = 273
 
-# Parâmetros específicos para vermicompostagem
-TOC_YANG = 0.436  # Fração de carbono orgânico total
-TN_YANG = 14.2 / 1000  # Fração de nitrogênio total
-CH4_C_FRAC_YANG = 0.13 / 100  # Fração do TOC emitida como CH4-C
-N2O_N_FRAC_YANG = 0.92 / 100  # Fração do TN emitida como N2O-N
+# Parâmetros específicos para COMPOSTAGEM COM MINHOCAS (Yang et al. 2017)
+TOC_COMPOSTAGEM_MINHOCAS = 0.436  # Fração de carbono orgânico total
+TN_COMPOSTAGEM_MINHOCAS = 14.2 / 1000  # Fração de nitrogênio total
+CH4_C_FRAC_COMPOSTAGEM_MINHOCAS = 0.13 / 100  # Fração do TOC emitida como CH4-C
+N2O_N_FRAC_COMPOSTAGEM_MINHOCAS = 0.92 / 100  # Fração do TN emitida como N2O-N
 
-# Parâmetros específicos para compostagem termofílica
-CH4_C_FRAC_THERMO = 0.006
-N2O_N_FRAC_THERMO = 0.0196
+# Perfil temporal de emissões baseado em Yang et al. (2017) - COMPOSTAGEM COM MINHOCAS
+PERFIL_CH4_COMPOSTAGEM_MINHOCAS = np.array([0.02, 0.02, 0.02, 0.03, 0.03, 0.04, 0.04, 0.05, 0.05, 0.06, 
+                            0.07, 0.08, 0.09, 0.10, 0.09, 0.08, 0.07, 0.06, 0.05, 0.04, 
+                            0.03, 0.02, 0.02, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 
+                            0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 
+                            0.002, 0.002, 0.002, 0.002, 0.002, 0.001, 0.001, 0.001, 0.001, 0.001])
+PERFIL_CH4_COMPOSTAGEM_MINHOCAS /= PERFIL_CH4_COMPOSTAGEM_MINHOCAS.sum()
+
+PERFIL_N2O_COMPOSTAGEM_MINHOCAS = np.array([0.15, 0.10, 0.20, 0.05, 0.03, 0.03, 0.03, 0.04, 0.05, 0.06, 
+                            0.08, 0.09, 0.10, 0.08, 0.07, 0.06, 0.05, 0.04, 0.03, 0.02, 
+                            0.01, 0.01, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 
+                            0.002, 0.002, 0.002, 0.002, 0.002, 0.001, 0.001, 0.001, 0.001, 0.001, 
+                            0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001])
+PERFIL_N2O_COMPOSTAGEM_MINHOCAS /= PERFIL_N2O_COMPOSTAGEM_MINHOCAS.sum()
 
 # =============================================================================
-# SIMULAÇÃO DETALHADA
+# SIMULAÇÃO DETALHADA - APENAS COMPOSTAGEM COM MINHOCAS
 # =============================================================================
 
 if st.session_state.get('run_simulation', False):
-    st.header("📊 Resultados Detalhados da Simulação")
+    st.header("📊 Resultados Detalhados da Simulação - Compostagem com Minhocas")
     
     # Cálculos principais
-    total_evitado_tese = emissões_evitadas_ano * anos_simulacao
-    total_evitado_unfccc = total_evitado_tese * 0.8  # Aproximação para UNFCCC
+    total_evitado_compostagem_minhocas = emissões_evitadas_ano * anos_simulacao
     
     # Obter preço do carbono
     preco_carbono = st.session_state.preco_carbono
@@ -371,16 +381,14 @@ if st.session_state.get('run_simulation', False):
     fonte_cotacao = st.session_state.fonte_cotacao
     
     # Calcular valores financeiros
-    valor_tese_eur = calcular_valor_creditos(total_evitado_tese, preco_carbono, moeda)
-    valor_unfccc_eur = calcular_valor_creditos(total_evitado_unfccc, preco_carbono, moeda)
-    valor_tese_brl = calcular_valor_creditos(total_evitado_tese, preco_carbono, "R$", taxa_cambio)
-    valor_unfccc_brl = calcular_valor_creditos(total_evitado_unfccc, preco_carbono, "R$", taxa_cambio)
+    valor_compostagem_minhocas_eur = calcular_valor_creditos(total_evitado_compostagem_minhocas, preco_carbono, moeda)
+    valor_compostagem_minhocas_brl = calcular_valor_creditos(total_evitado_compostagem_minhocas, preco_carbono, "R$", taxa_cambio)
     
     # SEÇÃO: VALOR FINANCEIRO
     st.subheader("💰 Valor Financeiro das Emissões Evitadas")
     
     # Euros
-    col1, col2, col3 = st.columns(3)
+    col1, col2 = st.columns(2)
     with col1:
         st.metric(
             f"Preço Carbono (Euro)", 
@@ -389,19 +397,13 @@ if st.session_state.get('run_simulation', False):
         )
     with col2:
         st.metric(
-            "Valor Tese (Euro)", 
-            f"{moeda} {formatar_brasil(valor_tese_eur)}",
-            help=f"Baseado em {formatar_brasil(total_evitado_tese)} tCO₂eq evitadas"
-        )
-    with col3:
-        st.metric(
-            "Valor UNFCCC (Euro)", 
-            f"{moeda} {formatar_brasil(valor_unfccc_eur)}",
-            help=f"Baseado em {formatar_brasil(total_evitado_unfccc)} tCO₂eq evitadas"
+            "Valor Créditos (Euro)", 
+            f"{moeda} {formatar_brasil(valor_compostagem_minhocas_eur)}",
+            help=f"Baseado em {formatar_brasil(total_evitado_compostagem_minhocas)} tCO₂eq evitadas"
         )
     
     # Reais
-    col1, col2, col3 = st.columns(3)
+    col1, col2 = st.columns(2)
     with col1:
         st.metric(
             f"Preço Carbono (R$)", 
@@ -410,19 +412,13 @@ if st.session_state.get('run_simulation', False):
         )
     with col2:
         st.metric(
-            "Valor Tese (R$)", 
-            f"R$ {formatar_brasil(valor_tese_brl)}",
-            help=f"Baseado em {formatar_brasil(total_evitado_tese)} tCO₂eq evitadas"
-        )
-    with col3:
-        st.metric(
-            "Valor UNFCCC (R$)", 
-            f"R$ {formatar_brasil(valor_unfccc_brl)}",
-            help=f"Baseado em {formatar_brasil(total_evitado_unfccc)} tCO₂eq evitadas"
+            "Valor Créditos (R$)", 
+            f"R$ {formatar_brasil(valor_compostagem_minhocas_brl)}",
+            help=f"Baseado em {formatar_brasil(total_evitado_compostagem_minhocas)} tCO₂eq evitadas"
         )
 
     # RESUMO DO SISTEMA
-    st.subheader("🏫 Resumo do Sistema Escolar")
+    st.subheader("🏫 Resumo do Sistema de Compostagem com Minhocas")
     
     col1, col2, col3, col4 = st.columns(4)
     
@@ -442,20 +438,20 @@ if st.session_state.get('run_simulation', False):
     
     with col3:
         st.metric(
-            "Total Evitado (Tese)",
-            f"{formatar_brasil(total_evitado_tese)} tCO₂eq",
+            "Total Evitado",
+            f"{formatar_brasil(total_evitado_compostagem_minhocas)} tCO₂eq",
             f"{anos_simulacao} anos"
         )
     
     with col4:
         st.metric(
-            "Valor Financeiro (Tese)",
-            f"R$ {formatar_brasil(valor_tese_brl)}",
-            f"{formatar_brasil(total_evitado_tese)} tCO₂eq"
+            "Valor Financeiro Total",
+            f"R$ {formatar_brasil(valor_compostagem_minhocas_brl)}",
+            f"{formatar_brasil(total_evitado_compostagem_minhocas)} tCO₂eq"
         )
 
     # DETALHAMENTO DOS CÁLCULOS
-    st.subheader("🧮 Detalhamento dos Cálculos")
+    st.subheader("🧮 Detalhamento dos Cálculos - Compostagem com Minhocas")
     
     with st.expander("📋 Métodos de Cálculo"):
         st.markdown(f"""
@@ -479,19 +475,25 @@ if st.session_state.get('run_simulation', False):
         
         Total evitado = Emissões evitadas/ano × Anos simulação
                      = {formatar_brasil(emissões_evitadas_ano)} tCO₂eq/ano × {anos_simulacao} anos
-                     = {formatar_brasil(total_evitado_tese)} tCO₂eq
+                     = {formatar_brasil(total_evitado_compostagem_minhocas)} tCO₂eq
         ```
         
         **Cálculo do Valor Financeiro:**
         ```
         Valor (Euro) = Total evitado × Preço carbono
-                    = {formatar_brasil(total_evitado_tese)} tCO₂eq × {moeda} {formatar_brasil(preco_carbono)}/tCO₂eq
-                    = {moeda} {formatar_brasil(valor_tese_eur)}
+                    = {formatar_brasil(total_evitado_compostagem_minhocas)} tCO₂eq × {moeda} {formatar_brasil(preco_carbono)}/tCO₂eq
+                    = {moeda} {formatar_brasil(valor_compostagem_minhocas_eur)}
         
         Valor (R$) = Valor (Euro) × Taxa câmbio
-                  = {moeda} {formatar_brasil(valor_tese_eur)} × R$ {formatar_brasil(taxa_cambio)}/€
-                  = R$ {formatar_brasil(valor_tese_brl)}
+                  = {moeda} {formatar_brasil(valor_compostagem_minhocas_eur)} × R$ {formatar_brasil(taxa_cambio)}/€
+                  = R$ {formatar_brasil(valor_compostagem_minhocas_brl)}
         ```
+        
+        **📚 Base Científica:**
+        - **Metodologia:** Compostagem com minhocas (Yang et al. 2017)
+        - **Fatores de emissão:** Baseados em estudos com Eisenia fetida
+        - **GWP:** IPCC AR6 (20 anos)
+        - **Ciclo:** 50 dias (otimizado para minhocas californianas)
         """)
     
     # PROJEÇÃO ANUAL
@@ -513,57 +515,37 @@ if st.session_state.get('run_simulation', False):
     
     projecao_df = pd.DataFrame(projecao_anual)
     st.dataframe(projecao_df, use_container_width=True)
-    
-    # COMPARAÇÃO ENTRE METODOLOGIAS
-    st.subheader("📊 Comparação entre Metodologias")
-    
-    comp_df = pd.DataFrame({
-        'Metodologia': ['Proposta da Tese', 'UNFCCC (2012)'],
-        'Emissões Evitadas (tCO₂eq)': [
-            formatar_brasil(total_evitado_tese),
-            formatar_brasil(total_evitado_unfccc)
-        ],
-        'Valor em Euros': [
-            formatar_brasil(valor_tese_eur, moeda=True, simbolo_moeda="€"),
-            formatar_brasil(valor_unfccc_eur, moeda=True, simbolo_moeda="€")
-        ],
-        'Valor em Reais': [
-            formatar_brasil(valor_tese_brl, moeda=True, simbolo_moeda="R$"),
-            formatar_brasil(valor_unfccc_brl, moeda=True, simbolo_moeda="R$")
-        ]
-    })
-    
-    st.dataframe(comp_df, use_container_width=True)
 
 else:
     st.info("""
     💡 **Configure o sistema de compostagem na barra lateral e clique em 'Executar Simulação Completa' para ver os resultados.**
     
     O simulador calculará:
-    - Capacidade total do sistema de compostagem
+    - Capacidade total do sistema de compostagem com minhocas
     - Emissões de gases de efeito estufa evitadas
     - Valor financeiro dos créditos de carbono
-    - Comparação entre metodologias (Tese vs UNFCCC)
     - Projeção anual de resultados
+    
+    **🌱 Metodologia:** Compostagem com minhocas (Yang et al. 2017)
     """)
 
 # =============================================================================
-# INFORMAÇÕES ADICIONAIS - ATUALIZADA COM CAPACIDADE DINÂMICA
+# INFORMAÇÕES ADICIONAIS - ATUALIZADA COM COMPOSTAGEM COM MINHOCAS
 # =============================================================================
 
-with st.expander("📚 Sobre o Sistema de Compostagem Escolar"):
+with st.expander("📚 Sobre o Sistema de Compostagem com Minhocas"):
     st.markdown(f"""
     **🎯 Objetivo do Sistema:**
     - Processar resíduos orgânicos das escolas (frutas, verduras, restaurantes)
-    - Produzir fertilizantes naturais (húmus e bio-wash)
-    - Gerar créditos de carbono através da compostagem
-    - Educar alunos sobre sustentabilidade
+    - Produzir fertilizantes naturais (húmus e bio-wash) usando minhocas
+    - Gerar créditos de carbono através da compostagem com minhocas
+    - Educar alunos sobre sustentabilidade e vermicompostagem
     
     **⚙️ Especificações Técnicas:**
     - **Reatores:** Caixas de {capacidade_reator}L com tampa
     - **Minhocas:** Eisenia fetida (Californianas)
     - **Substrato:** Serragem + folhas secas
-    - **Ciclo:** 50 dias (enchimento + processamento)
+    - **Ciclo:** 50 dias (enchimento + processamento pelas minhocas)
     - **Produtos:** Húmus (sólido) + Bio-wash (líquido)
     
     **📊 Capacidade de Processamento:**
@@ -576,14 +558,20 @@ with st.expander("📚 Sobre o Sistema de Compostagem Escolar"):
     - Créditos de carbono comercializáveis
     - Redução de custos com fertilizantes
     - Economia na gestão de resíduos
-    - Potencial de receita com produtos
+    - Potencial de receita com produtos da compostagem
+    
+    **🔬 Base Científica:**
+    - **Metodologia:** Yang et al. (2017) - Compostagem com minhocas
+    - **Eficiência:** Redução de 80-90% nas emissões vs aterro sanitário
+    - **Qualidade:** Produção de fertilizantes orgânicos de alta qualidade
     """)
 
 # Rodapé
 st.markdown("---")
 st.markdown("""
-**🏫 Sistema de Compostagem Escolar - Ribeirão Preto/SP**  
+**🏫 Sistema de Compostagem com Minhocas - Ribeirão Preto/SP**  
 *Desenvolvido para cálculo de créditos de carbono no contexto educacional*
 
-**📞 Contato:** Secretaria Municipal de Educação - Ribeirão Preto
+**📞 Contato:** Secretaria Municipal de Educação - Ribeirão Preto  
+**🔬 Metodologia:** Compostagem com minhocas (Yang et al. 2017)
 """)
