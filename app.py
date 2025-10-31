@@ -230,7 +230,7 @@ with st.sidebar:
     anos_simulacao = st.selectbox(
         "Duração do projeto",
         options=[4, 8, 12, 16, 20],
-        index=2,  # Padrão 12 anos
+        index=0,  # Alterado de 2 para 0 - padrão 4 anos
         help="Período típico para projetos escolares"
     )
     
@@ -451,7 +451,7 @@ else:
     
     2. **Verifique as cotações** do mercado de carbono
     
-    3. **Selecione a duração** do projeto (12 anos é típico para escolas)
+    3. **Selecione a duração** do projeto (4 anos é o padrão)
     
     4. **Clique em "Calcular Créditos de Carbono"** para ver os resultados
     
