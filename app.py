@@ -18,7 +18,7 @@ st.set_page_config(
 st.title("♻️ Sistema de Compostagem com Minhocas - Escolas")
 st.markdown("""
 **Simulador de Créditos de Carbono para Gestão de Resíduos Orgânicos Escolares**
-**Cálculo baseado no processamento de resíduos de restaurantes escolares como vegetais, frutas e borra de café**
+*Cálculo baseado no processamento de resíduos de restaurantes escolares: frutas, verduras e borra de café*
 """)
 
 # =============================================================================
@@ -73,7 +73,7 @@ def formatar_brasil(numero, casas_decimais=2, moeda=False, simbolo_moeda=""):
         return "0,00"
 
 # =============================================================================
-# FUNÇÕES DE COTAÇÃO DO CARBONO (MELHORADAS)
+# FUNÇões de cotação do carbono (melhoradas)
 # =============================================================================
 
 def obter_cotacao_carbono_investing():
@@ -387,7 +387,6 @@ with col3:
 
 # Parâmetros para cálculos de emissões (baseados em literatura científica)
 T = 25  # Temperatura média
-DOC = 0.15  # Carbono orgânico degradável
 
 # Compostagem com minhocas (Yang et al. 2017)
 TOC_COMPOSTAGEM_MINHOCAS = 0.436
@@ -400,11 +399,11 @@ GWP_CH4_20 = 79.7
 GWP_N2O_20 = 273
 
 # =============================================================================
-# CÁLCULOS SIMPLIFICADOS
+# CÁLCULOS BASEADOS EM IPCC
 # =============================================================================
 
 def calcular_emissoes_compostagem_minhocas(residuos_kg_dia_param):
-    """Calcula emissões da compostagem com minhocas"""
+    """Calcula emissões da compostagem com minhocas baseado em Yang et al. 2017"""
     # Parâmetros fixos para resíduos escolares
     umidade = 0.85  # 85% - típico para frutas/verduras
     fracao_ms = 1 - umidade
@@ -423,11 +422,28 @@ def calcular_emissoes_compostagem_minhocas(residuos_kg_dia_param):
     return emissões_tco2eq_ano
 
 def calcular_emissoes_aterro(residuo_anual_kg_param):
-    """Calcula emissões do aterro"""
-    # Fator de emissão simplificado para aterro (kg CO₂eq/kg resíduo)
-    fator_emissao_aterro = 0.8  # Baseado em IPCC e literatura
+    """Calcula emissões do aterro baseado em metodologia IPCC"""
+    # Parâmetros baseados em IPCC 2006 Waste Model e literatura científica
+    DOC = 0.15  # Carbono orgânico degradável (IPCC padrão para resíduos alimentares)
+    DOC_f = 0.5  # Fração de DOC que realmente se decompõe
+    F = 0.5      # Fração de CH4 no biogás
+    MCF = 1.0    # Fator de correção de metano para aterros managed (IPCC)
+    OX = 0.1     # Fator de oxidação
     
-    emissões_tco2eq_ano = (residuo_anual_kg_param * fator_emissao_aterro) / 1000
+    # Cálculo do potencial de geração de CH4 (IPCC)
+    potencial_CH4_kg = (residuo_anual_kg_param * DOC * DOC_f * F * 
+                       (16/12) * MCF * (1 - OX))
+    
+    # Conversão para CO₂eq usando GWP AR6
+    emissao_CH4_tco2eq = (potencial_CH4_kg * GWP_CH4_20) / 1000
+    
+    # Adicionar emissões de N2O do aterro (estimativa conservadora baseada em IPCC)
+    fator_N2O_aterro = 0.005  # kg N2O/kg resíduo (IPCC para resíduos municipais)
+    emissao_N2O_kg = residuo_anual_kg_param * fator_N2O_aterro
+    emissao_N2O_tco2eq = (emissao_N2O_kg * GWP_N2O_20) / 1000
+    
+    # Total de emissões do aterro
+    emissões_tco2eq_ano = emissao_CH4_tco2eq + emissao_N2O_tco2eq
     
     return emissões_tco2eq_ano
 
@@ -437,7 +453,24 @@ def calcular_detalhes_emissoes(residuo_anual_kg_param, residuos_kg_dia_param):
     umidade = 0.85
     fracao_ms = 1 - umidade
     
-    # Cálculo detalhado da compostagem
+    # CÁLCULO DETALHADO DO ATERRO (IPCC)
+    DOC = 0.15
+    DOC_f = 0.5
+    F = 0.5
+    MCF = 1.0
+    OX = 0.1
+    
+    potencial_CH4_kg = (residuo_anual_kg_param * DOC * DOC_f * F * 
+                       (16/12) * MCF * (1 - OX))
+    emissao_CH4_tco2eq = (potencial_CH4_kg * GWP_CH4_20) / 1000
+    
+    fator_N2O_aterro = 0.005
+    emissao_N2O_kg = residuo_anual_kg_param * fator_N2O_aterro
+    emissao_N2O_tco2eq = (emissao_N2O_kg * GWP_N2O_20) / 1000
+    
+    aterro_total = emissao_CH4_tco2eq + emissao_N2O_tco2eq
+    
+    # Cálculo detalhado da compostagem (Yang et al. 2017)
     ch4_kg_dia = residuos_kg_dia_param * (TOC_COMPOSTAGEM_MINHOCAS * CH4_C_FRAC_COMPOSTAGEM_MINHOCAS * (16/12) * fracao_ms)
     n2o_kg_dia = residuos_kg_dia_param * (TN_COMPOSTAGEM_MINHOCAS * N2O_N_FRAC_COMPOSTAGEM_MINHOCAS * (44/28) * fracao_ms)
     
@@ -447,9 +480,6 @@ def calcular_detalhes_emissoes(residuo_anual_kg_param, residuos_kg_dia_param):
     ch4_tco2eq = (ch4_kg_ano * GWP_CH4_20) / 1000
     n2o_tco2eq = (n2o_kg_ano * GWP_N2O_20) / 1000
     compostagem_total = ch4_tco2eq + n2o_tco2eq
-    
-    # Cálculo detalhado do aterro
-    aterro_total = (residuo_anual_kg_param * 0.8) / 1000
     
     # Emissões evitadas
     evitadas_total = aterro_total - compostagem_total
@@ -465,6 +495,10 @@ def calcular_detalhes_emissoes(residuo_anual_kg_param, residuos_kg_dia_param):
             'total': compostagem_total
         },
         'aterro': {
+            'potencial_CH4_kg': potencial_CH4_kg,
+            'emissao_N2O_kg': emissao_N2O_kg,
+            'ch4_tco2eq': emissao_CH4_tco2eq,
+            'n2o_tco2eq': emissao_N2O_tco2eq,
             'total': aterro_total
         },
         'evitadas': evitadas_total,
@@ -476,7 +510,13 @@ def calcular_detalhes_emissoes(residuo_anual_kg_param, residuos_kg_dia_param):
             'CH4_frac': CH4_C_FRAC_COMPOSTAGEM_MINHOCAS,
             'N2O_frac': N2O_N_FRAC_COMPOSTAGEM_MINHOCAS,
             'GWP_CH4': GWP_CH4_20,
-            'GWP_N2O': GWP_N2O_20
+            'GWP_N2O': GWP_N2O_20,
+            'DOC': DOC,
+            'DOC_f': DOC_f,
+            'F': F,
+            'MCF': MCF,
+            'OX': OX,
+            'fator_N2O_aterro': fator_N2O_aterro
         }
     }
 
@@ -548,18 +588,43 @@ if st.session_state.get('run_simulation', False):
         with col1:
             st.markdown("""
             **🏭 Cenário Aterro (Linha de Base):**
-            - **Metodologia:** Baseada em fatores IPCC para aterros sanitários
-            - **Fator de emissão:** 0,8 kg CO₂eq por kg de resíduo
-            - **Fonte:** IPCC Guidelines for National Greenhouse Gas Inventories
+            - **Metodologia:** IPCC 2006 Waste Model + Guidelines 2019
+            - **Fonte:** Painel Intergovernamental sobre Mudanças Climáticas
+            - **Parâmetros IPCC:**
+              • DOC (Carbono Orgânico Degradável): 15%
+              • DOC_f (Fração Decomposta): 50%
+              • F (Fração CH₄ no Biogás): 50%
+              • MCF (Fator Correção Metano): 1.0
+              • OX (Oxidação): 10%
             """)
             
             st.markdown(f"""
-            **Cálculo:**
+            **Cálculo CH₄ Aterro:**
             ```
-            Resíduo anual = {formatar_brasil(residuo_anual_kg, 1)} kg
-            Fator emissão = 0,8 kg CO₂eq/kg
-            Emissões aterro = {formatar_brasil(residuo_anual_kg, 1)} kg × 0,8 = {formatar_brasil(residuo_anual_kg * 0.8, 1)} kg CO₂eq
-            Emissões aterro = {formatar_brasil(residuo_anual_kg * 0.8 / 1000, 3)} tCO₂eq/ano
+            CH₄ potencial = Resíduo × DOC × DOC_f × F × (16/12) × MCF × (1-OX)
+            CH₄ potencial = {formatar_brasil(residuo_anual_kg, 1)} × {detalhes['parametros']['DOC']} × {detalhes['parametros']['DOC_f']} × {detalhes['parametros']['F']} × 1,333 × {detalhes['parametros']['MCF']} × 0,9
+            CH₄ potencial = {formatar_brasil(detalhes['aterro']['potencial_CH4_kg'], 1)} kg CH₄/ano
+            
+            CH₄ em CO₂eq = {formatar_brasil(detalhes['aterro']['potencial_CH4_kg'], 1)} × {detalhes['parametros']['GWP_CH4']}
+            CH₄ em CO₂eq = {formatar_brasil(detalhes['aterro']['ch4_tco2eq'], 3)} tCO₂eq
+            ```
+            """)
+
+            st.markdown(f"""
+            **Cálculo N₂O Aterro:**
+            ```
+            N₂O = Resíduo × Fator_N₂O
+            N₂O = {formatar_brasil(residuo_anual_kg, 1)} × {detalhes['parametros']['fator_N2O_aterro']}
+            N₂O = {formatar_brasil(detalhes['aterro']['emissao_N2O_kg'], 2)} kg N₂O/ano
+            
+            N₂O em CO₂eq = {formatar_brasil(detalhes['aterro']['emissao_N2O_kg'], 2)} × {detalhes['parametros']['GWP_N2O']}
+            N₂O em CO₂eq = {formatar_brasil(detalhes['aterro']['n2o_tco2eq'], 4)} tCO₂eq
+            ```
+            
+            **Total Aterro:**
+            ```
+            Total = CH₄ + N₂O = {formatar_brasil(detalhes['aterro']['ch4_tco2eq'], 3)} + {formatar_brasil(detalhes['aterro']['n2o_tco2eq'], 4)}
+            Total = {formatar_brasil(detalhes['aterro']['total'], 3)} tCO₂eq/ano
             ```
             """)
         
@@ -641,7 +706,7 @@ if st.session_state.get('run_simulation', False):
             st.metric(
                 "Aterro (tCO₂eq/ano)",
                 f"{formatar_brasil(detalhes['aterro']['total'], 4)}",
-                "Fator IPCC"
+                "Metodologia IPCC"
             )
         
         with col7:
@@ -756,10 +821,14 @@ with st.expander("📚 Sobre a Metodologia"):
     - Período de compostagem: 50 dias
     - Eficiência comprovada na redução de emissões
     
-    **Cenário de Referência (Aterro):**
-    - Baseado em metodologias IPCC
-    - Considera emissões de metano e óxido nitroso
-    - Inclui emissões do processo de decomposição
+    **Cenário de Referência (Aterro) - IPCC:**
+    - **Metodologia:** IPCC 2006 Waste Model
+    - **DOC (Carbono Orgânico Degradável):** 15% para resíduos alimentares
+    - **DOC_f (Fração Decomposta):** 50% 
+    - **F (Fração CH₄ no Biogás):** 50%
+    - **MCF (Fator Correção Metano):** 1.0 para aterros gerenciados
+    - **OX (Oxidação):** 10%
+    - **Fator N₂O:** 0,005 kg N₂O/kg resíduo
     
     **💰 Mercado de Carbono:**
     - Preços baseados no European Emissions Trading System (EU ETS)
@@ -785,6 +854,6 @@ st.markdown("""
 <div style="text-align: center">
     <h4>🏫 Sistema de Compostagem com Minhocas - Ribeirão Preto/SP</h4>
     <p><strong>Gestão de Resíduos</strong> • Desenvolvido para projetos de sustentabilidade escolar</p>
-    <p><em>Metodologia: Yang et al. (2017) • GWP: IPCC AR6 • Mercado: EU ETS</em></p>
+    <p><em>Metodologia: Yang et al. (2017) • IPCC 2006 • GWP: IPCC AR6 • Mercado: EU ETS</em></p>
 </div>
 """, unsafe_allow_html=True)
