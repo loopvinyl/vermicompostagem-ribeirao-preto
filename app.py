@@ -8,12 +8,12 @@ import numpy as np
 
 # Configuração da página
 st.set_page_config(
-    page_title="Vermicompostagem - Ribeirão Preto",
+    page_title="Compostagem - Ribeirão Preto",
     page_icon="♻️",
     layout="wide"
 )
 
-st.title("♻️ Vermicompostagem nas Escolas de Ribeirão Preto")
+st.title("♻️ Compostagem nas Escolas de Ribeirão Preto")
 st.markdown("**Monitoramento do sistema de compostagem com minhocas**")
 
 # =============================================================================
@@ -495,6 +495,6 @@ st.download_button(
 
 st.markdown("---")
 st.markdown("""
-**♻️ Sistema de Vermicompostagem - Ribeirão Preto/SP**  
+**♻️ Sistema de Compostagem - Ribeirão Preto/SP**  
 *Cálculo de créditos de carbono baseado na capacidade dos reatores e processamento de resíduos*
 """)
