@@ -203,7 +203,7 @@ with st.sidebar:
         max_value=100,
         value=30,
         step=5,
-        help="Caixas padrão de 30L para coleta de biofertilizante (bio-wash)"
+        help="Caixas padrão para coleta de biofertilizante (bio-wash)"
     )
     
     num_reatores = st.slider(
@@ -284,7 +284,7 @@ with st.sidebar:
         st.session_state.run_simulation = True
 
 # =============================================================================
-# INFORMAÇÕES SOBRE O SISTEMA
+# INFORMAÇÕES SOBRE O SISTEMA - COM CAPACIDADE DINÂMICA
 # =============================================================================
 
 st.header("🏫 Sistema de Compostagem Escolar")
@@ -292,10 +292,12 @@ st.header("🏫 Sistema de Compostagem Escolar")
 col1, col2, col3 = st.columns(3)
 
 with col1:
-    st.subheader("📦 Reatores de 30L")
-    st.markdown("""
+    # TÍTULO DINÂMICO - ATUALIZADO COM A CAPACIDADE ESCOLHIDA
+    st.subheader(f"📦 Reatores de {capacidade_reator}L")
+    st.markdown(f"""
     - **Material:** Plástico resistente
     - **Função:** Processar resíduos + coletar biofertilizante
+    - **Capacidade:** {formatar_brasil(capacidade_ciclo_kg/num_reatores, 1)} kg/reator por ciclo
     - **Conteúdo:**
       • Minhocas Californianas
       • Substrato inicial
@@ -305,9 +307,10 @@ with col1:
 
 with col2:
     st.subheader("🔄 Operação")
-    st.markdown("""
+    st.markdown(f"""
     - **Ciclo:** 50 dias
-    - **Processo:** Enche → Aguarda → Esvazia
+    - **Processo:** Enche → Aguarda {ciclos_ano}x/ano → Esvazia
+    - **Capacidade/ciclo:** {formatar_brasil(capacidade_ciclo_kg, 1)} kg
     - **Produtos:**
       • Húmus (fertilizante sólido)
       • Bio-wash (fertilizante líquido)
@@ -315,11 +318,12 @@ with col2:
     """)
 
 with col3:
-    st.subheader("📈 Capacidade")
+    st.subheader("📈 Capacidade Total")
     st.markdown(f"""
-    - **Reatores:** {num_reatores} unidades
+    - **Reatores:** {num_reatores} unidades de {capacidade_reator}L
     - **Capacidade/ciclo:** {formatar_brasil(capacidade_ciclo_kg, 1)} kg
     - **Processamento/anual:** {formatar_brasil(residuo_anual_ton, 1)} ton
+    - **Ciclos/ano:** {ciclos_ano}
     - **Emissões evitadas:** {formatar_brasil(emissões_evitadas_ano)} tCO₂eq/ano
     """)
 
@@ -544,11 +548,11 @@ else:
     """)
 
 # =============================================================================
-# INFORMAÇÕES ADICIONAIS
+# INFORMAÇÕES ADICIONAIS - ATUALIZADA COM CAPACIDADE DINÂMICA
 # =============================================================================
 
 with st.expander("📚 Sobre o Sistema de Compostagem Escolar"):
-    st.markdown("""
+    st.markdown(f"""
     **🎯 Objetivo do Sistema:**
     - Processar resíduos orgânicos das escolas (frutas, verduras, restaurantes)
     - Produzir fertilizantes naturais (húmus e bio-wash)
@@ -556,17 +560,17 @@ with st.expander("📚 Sobre o Sistema de Compostagem Escolar"):
     - Educar alunos sobre sustentabilidade
     
     **⚙️ Especificações Técnicas:**
-    - **Reatores:** Caixas de 30L com tampa
+    - **Reatores:** Caixas de {capacidade_reator}L com tampa
     - **Minhocas:** Eisenia fetida (Californianas)
     - **Substrato:** Serragem + folhas secas
     - **Ciclo:** 50 dias (enchimento + processamento)
     - **Produtos:** Húmus (sólido) + Bio-wash (líquido)
     
     **📊 Capacidade de Processamento:**
-    - Cada reator de 30L processa ~15 kg por ciclo
-    - Sistema com 3 reatores: ~45 kg por ciclo
-    - Com 6 ciclos/ano: ~270 kg/ano
-    - Emissões evitadas: ~0.22 tCO₂eq/ano
+    - Cada reator de {capacidade_reator}L processa ~{formatar_brasil(capacidade_ciclo_kg/num_reatores, 1)} kg por ciclo
+    - Sistema com {num_reatores} reatores: ~{formatar_brasil(capacidade_ciclo_kg, 1)} kg por ciclo
+    - Com {ciclos_ano} ciclos/ano: ~{formatar_brasil(residuo_anual_kg, 0)} kg/ano
+    - Emissões evitadas: ~{formatar_brasil(emissões_evitadas_ano)} tCO₂eq/ano
     
     **💰 Benefícios Financeiros:**
     - Créditos de carbono comercializáveis
