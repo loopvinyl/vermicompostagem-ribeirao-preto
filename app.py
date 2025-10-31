@@ -18,7 +18,7 @@ st.set_page_config(
 st.title("♻️ Sistema de Compostagem com Minhocas - Escolas")
 st.markdown("""
 **Simulador de Créditos de Carbono para Gestão de Resíduos Orgânicos Escolares**
-*Cálculo baseado no processamento de resíduos de restaurantes escolares: frutas, verduras e borra de café*
+**Cálculo baseado no processamento de resíduos de restaurantes escolares como vegetais, frutas e borra de café**
 """)
 
 # =============================================================================
