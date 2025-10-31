@@ -17,8 +17,8 @@ st.set_page_config(
 # Título principal
 st.title("♻️ Sistema de Compostagem com Minhocas - Escolas")
 st.markdown("""
-**Simulador de Créditos de Carbono para escolas que preparam alimentação:** 
-**cálculo baseado no processamento de resíduos de restaurantes escolares como vegetais, frutas e borra de café**
+**Simulador de Créditos de Carbono para Gestão de Resíduos Orgânicos Escolares**
+*Cálculo baseado no processamento de resíduos de restaurantes escolares: frutas, verduras e borra de café*
 """)
 
 # =============================================================================
@@ -431,6 +431,55 @@ def calcular_emissoes_aterro(residuo_anual_kg_param):
     
     return emissões_tco2eq_ano
 
+def calcular_detalhes_emissoes(residuo_anual_kg_param, residuos_kg_dia_param):
+    """Calcula detalhes completos das emissões para exibição"""
+    # Parâmetros fixos
+    umidade = 0.85
+    fracao_ms = 1 - umidade
+    
+    # Cálculo detalhado da compostagem
+    ch4_kg_dia = residuos_kg_dia_param * (TOC_COMPOSTAGEM_MINHOCAS * CH4_C_FRAC_COMPOSTAGEM_MINHOCAS * (16/12) * fracao_ms)
+    n2o_kg_dia = residuos_kg_dia_param * (TN_COMPOSTAGEM_MINHOCAS * N2O_N_FRAC_COMPOSTAGEM_MINHOCAS * (44/28) * fracao_ms)
+    
+    ch4_kg_ano = ch4_kg_dia * 365
+    n2o_kg_ano = n2o_kg_dia * 365
+    
+    ch4_tco2eq = (ch4_kg_ano * GWP_CH4_20) / 1000
+    n2o_tco2eq = (n2o_kg_ano * GWP_N2O_20) / 1000
+    compostagem_total = ch4_tco2eq + n2o_tco2eq
+    
+    # Cálculo detalhado do aterro
+    aterro_total = (residuo_anual_kg_param * 0.8) / 1000
+    
+    # Emissões evitadas
+    evitadas_total = aterro_total - compostagem_total
+    
+    return {
+        'compostagem': {
+            'ch4_kg_dia': ch4_kg_dia,
+            'n2o_kg_dia': n2o_kg_dia,
+            'ch4_kg_ano': ch4_kg_ano,
+            'n2o_kg_ano': n2o_kg_ano,
+            'ch4_tco2eq': ch4_tco2eq,
+            'n2o_tco2eq': n2o_tco2eq,
+            'total': compostagem_total
+        },
+        'aterro': {
+            'total': aterro_total
+        },
+        'evitadas': evitadas_total,
+        'parametros': {
+            'umidade': umidade,
+            'fracao_ms': fracao_ms,
+            'TOC': TOC_COMPOSTAGEM_MINHOCAS,
+            'TN': TN_COMPOSTAGEM_MINHOCAS,
+            'CH4_frac': CH4_C_FRAC_COMPOSTAGEM_MINHOCAS,
+            'N2O_frac': N2O_N_FRAC_COMPOSTAGEM_MINHOCAS,
+            'GWP_CH4': GWP_CH4_20,
+            'GWP_N2O': GWP_N2O_20
+        }
+    }
+
 # =============================================================================
 # EXECUÇÃO DA SIMULAÇÃO
 # =============================================================================
@@ -478,7 +527,154 @@ if st.session_state.get('run_simulation', False):
             f"{formatar_brasil(total_evitado)} tCO₂eq"
         )
     
-    # Comparação de cenários
+    # NOVA SEÇÃO: DETALHAMENTO DOS CÁLCULOS
+    st.subheader("🧮 Detalhamento dos Cálculos")
+    
+    # Calcular detalhes completos
+    detalhes = calcular_detalhes_emissoes(residuo_anual_kg, residuos_kg_dia)
+    
+    with st.expander("📊 Ver Detalhes Completo dos Cálculos de Emissões"):
+        st.markdown("""
+        ### 📈 Base do Cálculo de Emissões Evitadas
+        
+        **Fórmula Principal:**
+        ```
+        Emissões Evitadas = Emissões do Cenário Aterro - Emissões do Cenário Compostagem
+        ```
+        """)
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("""
+            **🏭 Cenário Aterro (Linha de Base):**
+            - **Metodologia:** Baseada em fatores IPCC para aterros sanitários
+            - **Fator de emissão:** 0,8 kg CO₂eq por kg de resíduo
+            - **Fonte:** IPCC Guidelines for National Greenhouse Gas Inventories
+            """)
+            
+            st.markdown(f"""
+            **Cálculo:**
+            ```
+            Resíduo anual = {formatar_brasil(residuo_anual_kg, 1)} kg
+            Fator emissão = 0,8 kg CO₂eq/kg
+            Emissões aterro = {formatar_brasil(residuo_anual_kg, 1)} kg × 0,8 = {formatar_brasil(residuo_anual_kg * 0.8, 1)} kg CO₂eq
+            Emissões aterro = {formatar_brasil(residuo_anual_kg * 0.8 / 1000, 3)} tCO₂eq/ano
+            ```
+            """)
+        
+        with col2:
+            st.markdown("""
+            **♻️ Cenário Compostagem (Projeto):**
+            - **Metodologia:** Yang et al. (2017) - Vermicompostagem
+            - **Base científica:** Valores específicos para minhocas californianas
+            - **GWP:** IPCC AR6 (20 anos)
+            """)
+            
+            st.markdown(f"""
+            **Parâmetros:**
+            - TOC (Carbono Orgânico Total): {detalhes['parametros']['TOC']} kg C/kg resíduo
+            - TN (Nitrogênio Total): {formatar_brasil(detalhes['parametros']['TN'] * 1000, 2)} g N/kg resíduo
+            - Umidade: {detalhes['parametros']['umidade'] * 100}%
+            - Fração CH₄-C/TOC: {formatar_brasil(detalhes['parametros']['CH4_frac'] * 100, 2)}%
+            - Fração N₂O-N/TN: {formatar_brasil(detalhes['parametros']['N2O_frac'] * 100, 2)}%
+            """)
+        
+        st.markdown("---")
+        st.subheader("🔍 Cálculo Detalhado da Compostagem")
+        
+        col3, col4 = st.columns(2)
+        
+        with col3:
+            st.markdown("""
+            **🌫️ Emissões de Metano (CH₄):**
+            """)
+            
+            st.markdown(f"""
+            ```
+            CH₄ por dia = Resíduo × TOC × (CH₄-C/TOC) × (16/12) × (1-umidade)
+            CH₄ por dia = {formatar_brasil(residuos_kg_dia, 2)} × {detalhes['parametros']['TOC']} × {detalhes['parametros']['CH4_frac']} × 1,333 × {detalhes['parametros']['fracao_ms']}
+            CH₄ por dia = {formatar_brasil(detalhes['compostagem']['ch4_kg_dia'], 6)} kg/dia
+            
+            CH₄ anual = {formatar_brasil(detalhes['compostagem']['ch4_kg_dia'], 6)} × 365
+            CH₄ anual = {formatar_brasil(detalhes['compostagem']['ch4_kg_ano'], 4)} kg
+            
+            CH₄ em CO₂eq = CH₄ × GWP_CH₄
+            CH₄ em CO₂eq = {formatar_brasil(detalhes['compostagem']['ch4_kg_ano'], 4)} × {detalhes['parametros']['GWP_CH4']}
+            CH₄ em CO₂eq = {formatar_brasil(detalhes['compostagem']['ch4_tco2eq'], 4)} tCO₂eq
+            ```
+            """)
+        
+        with col4:
+            st.markdown("""
+            **🌡️ Emissões de Óxido Nitroso (N₂O):**
+            """)
+            
+            st.markdown(f"""
+            ```
+            N₂O por dia = Resíduo × TN × (N₂O-N/TN) × (44/28) × (1-umidade)
+            N₂O por dia = {formatar_brasil(residuos_kg_dia, 2)} × {detalhes['parametros']['TN']} × {detalhes['parametros']['N2O_frac']} × 1,571 × {detalhes['parametros']['fracao_ms']}
+            N₂O por dia = {formatar_brasil(detalhes['compostagem']['n2o_kg_dia'], 6)} kg/dia
+            
+            N₂O anual = {formatar_brasil(detalhes['compostagem']['n2o_kg_dia'], 6)} × 365
+            N₂O anual = {formatar_brasil(detalhes['compostagem']['n2o_kg_ano'], 6)} kg
+            
+            N₂O em CO₂eq = N₂O × GWP_N₂O
+            N₂O em CO₂eq = {formatar_brasil(detalhes['compostagem']['n2o_kg_ano'], 6)} × {detalhes['parametros']['GWP_N2O']}
+            N₂O em CO₂eq = {formatar_brasil(detalhes['compostagem']['n2o_tco2eq'], 6)} tCO₂eq
+            ```
+            """)
+        
+        st.markdown("---")
+        st.subheader("📊 Resumo Anual das Emissões")
+        
+        col5, col6, col7 = st.columns(3)
+        
+        with col5:
+            st.metric(
+                "Compostagem (tCO₂eq/ano)",
+                f"{formatar_brasil(detalhes['compostagem']['total'], 4)}",
+                "CH₄ + N₂O"
+            )
+        
+        with col6:
+            st.metric(
+                "Aterro (tCO₂eq/ano)",
+                f"{formatar_brasil(detalhes['aterro']['total'], 4)}",
+                "Fator IPCC"
+            )
+        
+        with col7:
+            st.metric(
+                "Emissões Evitadas/ano",
+                f"{formatar_brasil(detalhes['evitadas'], 4)} tCO₂eq",
+                "Redução líquida"
+            )
+        
+        st.markdown("---")
+        st.subheader("📅 Projeção do Projeto")
+        
+        st.markdown(f"""
+        **Período do Projeto:** {anos_simulacao} anos
+        
+        **Cálculo Final:**
+        ```
+        Emissões evitadas totais = Emissões evitadas/ano × Período
+        Emissões evitadas totais = {formatar_brasil(detalhes['evitadas'], 4)} tCO₂eq/ano × {anos_simulacao} anos
+        Emissões evitadas totais = {formatar_brasil(total_evitado, 4)} tCO₂eq
+        ```
+        
+        **Valor dos Créditos:**
+        ```
+        Valor em Euros = {formatar_brasil(total_evitado, 4)} tCO₂eq × € {formatar_brasil(preco_carbono_eur, 2)}/tCO₂eq
+        Valor em Euros = € {formatar_brasil(valor_eur, 2)}
+        
+        Valor em Reais = € {formatar_brasil(valor_eur, 2)} × R$ {formatar_brasil(taxa_cambio, 2)}/€
+        Valor em Reais = R$ {formatar_brasil(valor_brl, 2)}
+        ```
+        """)
+    
+    # Comparação de cenários (seção original mantida)
     st.subheader("📊 Comparação de Cenários")
     
     col1, col2 = st.columns(2)
