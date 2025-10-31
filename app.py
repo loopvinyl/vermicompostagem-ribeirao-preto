@@ -593,7 +593,7 @@ st.markdown("---")
 st.markdown("""
 <div style="text-align: center">
     <h4>🏫 Sistema de Compostagem com Minhocas - Ribeirão Preto/SP</h4>
-    <p><strong>Secretaria Municipal de Educação</strong> • Desenvolvido para projetos de sustentabilidade escolar</p>
+    <p><strong>Gestão de Resíduos</strong> • Desenvolvido para projetos de sustentabilidade escolar</p>
     <p><em>Metodologia: Compostagem com minhocas (Yang et al. 2017) • GWP: IPCC AR6 • Mercado: EU ETS</em></p>
 </div>
 """, unsafe_allow_html=True)
