@@ -22,6 +22,26 @@ st.markdown("""
 """)
 
 # =============================================================================
+# INICIALIZAÇÃO DO SESSION STATE
+# =============================================================================
+
+# Inicializar variáveis de sessão se não existirem
+if 'cotacoes_carregadas' not in st.session_state:
+    st.session_state.cotacoes_carregadas = False
+if 'run_simulation' not in st.session_state:
+    st.session_state.run_simulation = False
+if 'preco_carbono' not in st.session_state:
+    st.session_state.preco_carbono = 85.50
+if 'moeda_carbono' not in st.session_state:
+    st.session_state.moeda_carbono = "€"
+if 'taxa_cambio' not in st.session_state:
+    st.session_state.taxa_cambio = 5.50
+if 'moeda_real' not in st.session_state:
+    st.session_state.moeda_real = "R$"
+if 'fonte_cotacao' not in st.session_state:
+    st.session_state.fonte_cotacao = "Referência"
+
+# =============================================================================
 # FUNÇÃO DE FORMATAÇÃO BRASILEIRA
 # =============================================================================
 
@@ -84,10 +104,6 @@ def exibir_painel_cotacoes():
     
     st.sidebar.header("💰 Mercado de Carbono")
     
-    # Inicializar session state para cotações se não existir
-    if 'cotacoes_carregadas' not in st.session_state:
-        st.session_state.cotacoes_carregadas = False
-    
     # Botão para atualizar cotações
     col1, col2 = st.sidebar.columns([3, 1])
     with col1:
@@ -96,17 +112,23 @@ def exibir_painel_cotacoes():
     
     # Carregar cotações se necessário
     if not st.session_state.cotacoes_carregadas:
-        with st.sidebar.spinner("Atualizando cotações..."):
-            preco_carbono, moeda_carbono, contrato_info, sucesso_carbono, fonte_carbono = obter_cotacao_carbono()
-            taxa_cambio, moeda_real, sucesso_euro, fonte_euro = obter_cotacao_euro_real()
-            
-            # Armazenar em session state
-            st.session_state.preco_carbono = preco_carbono
-            st.session_state.moeda_carbono = moeda_carbono
-            st.session_state.taxa_cambio = taxa_cambio
-            st.session_state.moeda_real = moeda_real
-            st.session_state.fonte_cotacao = fonte_carbono
-            st.session_state.cotacoes_carregadas = True
+        # Usar st.empty() para criar um placeholder para loading
+        loading_placeholder = st.sidebar.empty()
+        loading_placeholder.info("🔄 Atualizando cotações...")
+        
+        preco_carbono, moeda_carbono, contrato_info, sucesso_carbono, fonte_carbono = obter_cotacao_carbono()
+        taxa_cambio, moeda_real, sucesso_euro, fonte_euro = obter_cotacao_euro_real()
+        
+        # Armazenar em session state
+        st.session_state.preco_carbono = preco_carbono
+        st.session_state.moeda_carbono = moeda_carbono
+        st.session_state.taxa_cambio = taxa_cambio
+        st.session_state.moeda_real = moeda_real
+        st.session_state.fonte_cotacao = fonte_carbono
+        st.session_state.cotacoes_carregadas = True
+        
+        # Remover mensagem de loading
+        loading_placeholder.empty()
     
     # Exibir métricas de cotação
     st.sidebar.metric(
