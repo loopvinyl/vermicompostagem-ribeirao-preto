@@ -176,14 +176,6 @@ def calcular_residuo_processado_anual(capacidade_reator_litros, num_reatores, ci
     residuo_total_kg = residuo_por_ciclo_kg * ciclos_ano
     return residuo_total_kg
 
-def calcular_emissoes_evitadas(residuo_total_kg, fator_emissao_kgco2eq_kg=0.8):
-    """
-    Calcula emissões evitadas baseado na quantidade de resíduo processado
-    """
-    emissões_evitadas_kgco2eq = residuo_total_kg * fator_emissao_kgco2eq_kg
-    emissões_evitadas_tco2eq = emissões_evitadas_kgco2eq / 1000
-    return emissões_evitadas_tco2eq
-
 # =============================================================================
 # SIDEBAR COM CONFIGURAÇÃO DO SISTEMA
 # =============================================================================
@@ -246,30 +238,40 @@ with st.sidebar:
     )
     residuo_anual_ton = residuo_anual_kg / 1000
     
+    # Calcular resíduos diários baseado na capacidade do sistema
+    residuos_kg_dia = residuo_anual_kg / 365
+    
     # Exibir informações do sistema
     st.info(f"""
     **📊 Capacidade do Sistema:**
     - Por ciclo: {formatar_brasil(capacidade_ciclo_kg, 1)} kg
     - Por ano: {formatar_brasil(residuo_anual_ton, 1)} ton
+    - Resíduos/dia: {formatar_brasil(residuos_kg_dia, 1)} kg
     - Reatores: {num_reatores} × {capacidade_reator}L
     - Ciclos/ano: {ciclos_ano}
     """)
     
-    # Fator de emissão
-    st.subheader("🌱 Fator de Emissão")
-    fator_emissao = st.slider(
-        "Fator de emissão evitada (kg CO₂eq/kg resíduo)",
-        min_value=0.5,
-        max_value=1.5,
-        value=0.8,
-        step=0.1,
-        help="Quanto de emissão é evitada por kg de resíduo compostado vs aterro"
+    # Parâmetros adicionais para cálculos de emissões
+    st.subheader("🌡️ Parâmetros Ambientais")
+    
+    umidade_valor = st.slider(
+        "Umidade do resíduo (%)", 
+        50, 95, 85, 1,
+        help="Percentual de umidade dos resíduos orgânicos"
+    )
+    umidade = umidade_valor / 100.0
+    
+    massa_exposta_kg = st.slider(
+        "Massa exposta na frente de trabalho (kg)", 
+        50, 200, 100, 10,
+        help="Massa de resíduos exposta diariamente para tratamento"
     )
     
-    # Cálculo das emissões evitadas
-    emissões_evitadas_ano = calcular_emissoes_evitadas(residuo_anual_kg, fator_emissao)
-    
-    st.success(f"**Emissões evitadas:** {formatar_brasil(emissões_evitadas_ano)} tCO₂eq/ano")
+    h_exposta = st.slider(
+        "Horas expostas por dia", 
+        4, 24, 8, 1,
+        help="Horas diárias de exposição dos resíduos"
+    )
     
     # Configuração da simulação
     st.subheader("🎯 Configuração de Simulação")
@@ -324,55 +326,197 @@ with col3:
     - **Capacidade/ciclo:** {formatar_brasil(capacidade_ciclo_kg, 1)} kg
     - **Processamento/anual:** {formatar_brasil(residuo_anual_ton, 1)} ton
     - **Ciclos/ano:** {ciclos_ano}
-    - **Emissões evitadas:** {formatar_brasil(emissões_evitadas_ano)} tCO₂eq/ano
+    - **Resíduos/dia:** {formatar_brasil(residuos_kg_dia, 1)} kg
     """)
 
 # =============================================================================
-# CÁLCULOS DETALHADOS DAS EMISSÕES - COMPOSTAGEM COM MINHOCAS
+# PARÂMETROS FIXOS PARA CÁLCULO DETALHADO DA VERMICOMPOSTAGEM
 # =============================================================================
 
 # Parâmetros fixos para cálculos de emissões
 T = 25  # Temperatura média (ºC)
 DOC = 0.15  # Carbono orgânico degradável (fração)
+DOCf_val = 0.0147 * T + 0.28
 MCF = 1  # Fator de correção de metano
 F = 0.5  # Fração de metano no biogás
 OX = 0.1  # Fator de oxidação
 Ri = 0.0  # Metano recuperado
 
+# Constante de decaimento (fixa como no script anexo)
+k_ano = 0.06  # Constante de decaimento anual
+
+# Compostagem com minhocas (Yang et al. 2017) - valores fixos
+TOC_COMPOSTAGEM_MINHOCAS = 0.436  # Fração de carbono orgânico total
+TN_COMPOSTAGEM_MINHOCAS = 14.2 / 1000  # Fração de nitrogênio total
+CH4_C_FRAC_COMPOSTAGEM_MINHOCAS = 0.13 / 100  # Fração do TOC emitida como CH4-C (fixo)
+N2O_N_FRAC_COMPOSTAGEM_MINHOCAS = 0.92 / 100  # Fração do TN emitida como N2O-N (fixo)
+DIAS_COMPOSTAGEM = 50  # Período total de compostagem
+
+# Perfil temporal de emissões baseado em Yang et al. (2017)
+PERFIL_CH4_COMPOSTAGEM_MINHOCAS = np.array([
+    0.02, 0.02, 0.02, 0.03, 0.03,  # Dias 1-5
+    0.04, 0.04, 0.05, 0.05, 0.06,  # Dias 6-10
+    0.07, 0.08, 0.09, 0.10, 0.09,  # Dias 11-15
+    0.08, 0.07, 0.06, 0.05, 0.04,  # Dias 16-20
+    0.03, 0.02, 0.02, 0.01, 0.01,  # Dias 21-25
+    0.01, 0.01, 0.01, 0.01, 0.01,  # Dias 26-30
+    0.005, 0.005, 0.005, 0.005, 0.005,  # Dias 31-35
+    0.005, 0.005, 0.005, 0.005, 0.005,  # Dias 36-40
+    0.002, 0.002, 0.002, 0.002, 0.002,  # Dias 41-45
+    0.001, 0.001, 0.001, 0.001, 0.001   # Dias 46-50
+])
+PERFIL_CH4_COMPOSTAGEM_MINHOCAS /= PERFIL_CH4_COMPOSTAGEM_MINHOCAS.sum()
+
+PERFIL_N2O_COMPOSTAGEM_MINHOCAS = np.array([
+    0.15, 0.10, 0.20, 0.05, 0.03,  # Dias 1-5 (pico no dia 3)
+    0.03, 0.03, 0.04, 0.05, 0.06,  # Dias 6-10
+    0.08, 0.09, 0.10, 0.08, 0.07,  # Dias 11-15
+    0.06, 0.05, 0.04, 0.03, 0.02,  # Dias 16-20
+    0.01, 0.01, 0.005, 0.005, 0.005,  # Dias 21-25
+    0.005, 0.005, 0.005, 0.005, 0.005,  # Dias 26-30
+    0.002, 0.002, 0.002, 0.002, 0.002,  # Dias 31-35
+    0.001, 0.001, 0.001, 0.001, 0.001,  # Dias 36-40
+    0.001, 0.001, 0.001, 0.001, 0.001,  # Dias 41-45
+    0.001, 0.001, 0.001, 0.001, 0.001   # Dias 46-50
+])
+PERFIL_N2O_COMPOSTAGEM_MINHOCAS /= PERFIL_N2O_COMPOSTAGEM_MINHOCAS.sum()
+
+# Emissões pré-descarte (Feng et al. 2020)
+CH4_pre_descarte_ugC_por_kg_h_media = 2.78
+
+fator_conversao_C_para_CH4 = 16/12
+CH4_pre_descarte_ugCH4_por_kg_h_media = CH4_pre_descarte_ugC_por_kg_h_media * fator_conversao_C_para_CH4
+CH4_pre_descarte_g_por_kg_dia = CH4_pre_descarte_ugCH4_por_kg_h_media * 24 / 1_000_000
+
+N2O_pre_descarte_mgN_por_kg = 20.26
+N2O_pre_descarte_mgN_por_kg_dia = N2O_pre_descarte_mgN_por_kg / 3
+N2O_pre_descarte_g_por_kg_dia = N2O_pre_descarte_mgN_por_kg_dia * (44/28) / 1000
+
+PERFIL_N2O_PRE_DESCARTE = {1: 0.8623, 2: 0.10, 3: 0.0377}
+
 # GWP (IPCC AR6)
 GWP_CH4_20 = 79.7
 GWP_N2O_20 = 273
 
-# Parâmetros específicos para COMPOSTAGEM COM MINHOCAS (Yang et al. 2017)
-TOC_COMPOSTAGEM_MINHOCAS = 0.436  # Fração de carbono orgânico total
-TN_COMPOSTAGEM_MINHOCAS = 14.2 / 1000  # Fração de nitrogênio total
-CH4_C_FRAC_COMPOSTAGEM_MINHOCAS = 0.13 / 100  # Fração do TOC emitida como CH4-C
-N2O_N_FRAC_COMPOSTAGEM_MINHOCAS = 0.92 / 100  # Fração do TN emitida como N2O-N
+# Período de Simulação
+dias = anos_simulacao * 365
+ano_inicio = datetime.now().year
+data_inicio = datetime(ano_inicio, 1, 1)
+datas = pd.date_range(start=data_inicio, periods=dias, freq='D')
 
-# Perfil temporal de emissões baseado em Yang et al. (2017) - COMPOSTAGEM COM MINHOCAS
-PERFIL_CH4_COMPOSTAGEM_MINHOCAS = np.array([0.02, 0.02, 0.02, 0.03, 0.03, 0.04, 0.04, 0.05, 0.05, 0.06, 
-                            0.07, 0.08, 0.09, 0.10, 0.09, 0.08, 0.07, 0.06, 0.05, 0.04, 
-                            0.03, 0.02, 0.02, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 
-                            0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 
-                            0.002, 0.002, 0.002, 0.002, 0.002, 0.001, 0.001, 0.001, 0.001, 0.001])
-PERFIL_CH4_COMPOSTAGEM_MINHOCAS /= PERFIL_CH4_COMPOSTAGEM_MINHOCAS.sum()
-
-PERFIL_N2O_COMPOSTAGEM_MINHOCAS = np.array([0.15, 0.10, 0.20, 0.05, 0.03, 0.03, 0.03, 0.04, 0.05, 0.06, 
-                            0.08, 0.09, 0.10, 0.08, 0.07, 0.06, 0.05, 0.04, 0.03, 0.02, 
-                            0.01, 0.01, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 
-                            0.002, 0.002, 0.002, 0.002, 0.002, 0.001, 0.001, 0.001, 0.001, 0.001, 
-                            0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001])
-PERFIL_N2O_COMPOSTAGEM_MINHOCAS /= PERFIL_N2O_COMPOSTAGEM_MINHOCAS.sum()
+# Perfil temporal N2O (Wang et al. 2017)
+PERFIL_N2O = {1: 0.10, 2: 0.30, 3: 0.40, 4: 0.15, 5: 0.05}
 
 # =============================================================================
-# SIMULAÇÃO DETALHADA - APENAS COMPOSTAGEM COM MINHOCAS
+# FUNÇÕES DE CÁLCULO DETALHADO (BASEADO NO SCRIPT ORIGINAL)
+# =============================================================================
+
+def ajustar_emissoes_pre_descarte(O2_concentracao=21):
+    ch4_ajustado = CH4_pre_descarte_g_por_kg_dia
+
+    if O2_concentracao == 21:
+        fator_n2o = 1.0
+    elif O2_concentracao == 10:
+        fator_n2o = 11.11 / 20.26
+    elif O2_concentracao == 1:
+        fator_n2o = 7.86 / 20.26
+    else:
+        fator_n2o = 1.0
+
+    n2o_ajustado = N2O_pre_descarte_g_por_kg_dia * fator_n2o
+    return ch4_ajustado, n2o_ajustado
+
+def calcular_emissoes_pre_descarte(O2_concentracao=21, dias_simulacao=dias):
+    ch4_ajustado, n2o_ajustado = ajustar_emissoes_pre_descarte(O2_concentracao)
+
+    emissoes_CH4_pre_descarte_kg = np.full(dias_simulacao, residuos_kg_dia * ch4_ajustado / 1000)
+    emissoes_N2O_pre_descarte_kg = np.zeros(dias_simulacao)
+
+    for dia_entrada in range(dias_simulacao):
+        for dias_apos_descarte, fracao in PERFIL_N2O_PRE_DESCARTE.items():
+            dia_emissao = dia_entrada + dias_apos_descarte - 1
+            if dia_emissao < dias_simulacao:
+                emissoes_N2O_pre_descarte_kg[dia_emissao] += (
+                    residuos_kg_dia * n2o_ajustado * fracao / 1000
+                )
+
+    return emissoes_CH4_pre_descarte_kg, emissoes_N2O_pre_descarte_kg
+
+def calcular_emissoes_aterro(dias_simulacao=dias):
+    umidade_val, temp_val, doc_val = umidade, T, DOC
+
+    fator_umid = (1 - umidade_val) / (1 - 0.55)
+    f_aberto = np.clip((massa_exposta_kg / residuos_kg_dia) * (h_exposta / 24), 0.0, 1.0)
+    docf_calc = 0.0147 * temp_val + 0.28
+
+    potencial_CH4_por_kg = doc_val * docf_calc * MCF * F * (16/12) * (1 - Ri) * (1 - OX)
+    potencial_CH4_lote_diario = residuos_kg_dia * potencial_CH4_por_kg
+
+    t = np.arange(1, dias_simulacao + 1, dtype=float)
+    kernel_ch4 = np.exp(-k_ano * (t - 1) / 365.0) - np.exp(-k_ano * t / 365.0)
+    entradas_diarias = np.ones(dias_simulacao, dtype=float)
+    emissoes_CH4 = np.convolve(entradas_diarias, kernel_ch4, mode='full')[:dias_simulacao]
+    emissoes_CH4 *= potencial_CH4_lote_diario
+
+    E_aberto = 1.91
+    E_fechado = 2.15
+    E_medio = f_aberto * E_aberto + (1 - f_aberto) * E_fechado
+    E_medio_ajust = E_medio * fator_umid
+    emissao_diaria_N2O = (E_medio_ajust * (44/28) / 1_000_000) * residuos_kg_dia
+
+    kernel_n2o = np.array([PERFIL_N2O.get(d, 0) for d in range(1, 6)], dtype=float)
+    emissoes_N2O = np.convolve(np.full(dias_simulacao, emissao_diaria_N2O), kernel_n2o, mode='full')[:dias_simulacao]
+
+    O2_concentracao = 21
+    emissoes_CH4_pre_descarte_kg, emissoes_N2O_pre_descarte_kg = calcular_emissoes_pre_descarte(O2_concentracao, dias_simulacao)
+
+    total_ch4_aterro_kg = emissoes_CH4 + emissoes_CH4_pre_descarte_kg
+    total_n2o_aterro_kg = emissoes_N2O + emissoes_N2O_pre_descarte_kg
+
+    return total_ch4_aterro_kg, total_n2o_aterro_kg
+
+def calcular_emissoes_compostagem_minhocas(dias_simulacao=dias):
+    umidade_val, temp_val, doc_val = umidade, T, DOC
+    fracao_ms = 1 - umidade_val
+    
+    # Usando valores fixos para compostagem com minhocas
+    ch4_total_por_lote = residuos_kg_dia * (TOC_COMPOSTAGEM_MINHOCAS * CH4_C_FRAC_COMPOSTAGEM_MINHOCAS * (16/12) * fracao_ms)
+    n2o_total_por_lote = residuos_kg_dia * (TN_COMPOSTAGEM_MINHOCAS * N2O_N_FRAC_COMPOSTAGEM_MINHOCAS * (44/28) * fracao_ms)
+
+    emissoes_CH4 = np.zeros(dias_simulacao)
+    emissoes_N2O = np.zeros(dias_simulacao)
+
+    for dia_entrada in range(dias_simulacao):
+        for dia_compostagem in range(len(PERFIL_CH4_COMPOSTAGEM_MINHOCAS)):
+            dia_emissao = dia_entrada + dia_compostagem
+            if dia_emissao < dias_simulacao:
+                emissoes_CH4[dia_emissao] += ch4_total_por_lote * PERFIL_CH4_COMPOSTAGEM_MINHOCAS[dia_compostagem]
+                emissoes_N2O[dia_emissao] += n2o_total_por_lote * PERFIL_N2O_COMPOSTAGEM_MINHOCAS[dia_compostagem]
+
+    return emissoes_CH4, emissoes_N2O
+
+# =============================================================================
+# SIMULAÇÃO DETALHADA - CÁLCULO COMPLETO DAS EMISSÕES
 # =============================================================================
 
 if st.session_state.get('run_simulation', False):
     st.header("📊 Resultados Detalhados da Simulação - Compostagem com Minhocas")
     
-    # Cálculos principais
-    total_evitado_compostagem_minhocas = emissões_evitadas_ano * anos_simulacao
+    with st.spinner('Calculando emissões detalhadas...'):
+        # Calcular emissões para aterro e compostagem com minhocas
+        ch4_aterro_kg, n2o_aterro_kg = calcular_emissoes_aterro()
+        ch4_compostagem_kg, n2o_compostagem_kg = calcular_emissoes_compostagem_minhocas()
+        
+        # Converter para tCO₂eq
+        total_aterro_tco2eq = (ch4_aterro_kg * GWP_CH4_20 + n2o_aterro_kg * GWP_N2O_20) / 1000
+        total_compostagem_tco2eq = (ch4_compostagem_kg * GWP_CH4_20 + n2o_compostagem_kg * GWP_N2O_20) / 1000
+        
+        # Calcular emissões evitadas
+        reducao_tco2eq_dia = total_aterro_tco2eq - total_compostagem_tco2eq
+        total_evitado_compostagem_minhocas = reducao_tco2eq_dia.sum()
+        
+        # Emissões anuais evitadas
+        emissões_evitadas_ano = total_evitado_compostagem_minhocas / anos_simulacao
     
     # Obter preço do carbono
     preco_carbono = st.session_state.preco_carbono
@@ -433,7 +577,7 @@ if st.session_state.get('run_simulation', False):
         st.metric(
             "Emissões Evitadas/Ano",
             f"{formatar_brasil(emissões_evitadas_ano)} tCO₂eq",
-            f"Fator: {fator_emissao} kg CO₂eq/kg"
+            "Metodologia Yang et al. (2017)"
         )
     
     with col3:
@@ -453,7 +597,7 @@ if st.session_state.get('run_simulation', False):
     # DETALHAMENTO DOS CÁLCULOS
     st.subheader("🧮 Detalhamento dos Cálculos - Compostagem com Minhocas")
     
-    with st.expander("📋 Métodos de Cálculo"):
+    with st.expander("📋 Métodos de Cálculo Detalhado"):
         st.markdown(f"""
         **Cálculo da Capacidade do Sistema:**
         ```
@@ -465,17 +609,28 @@ if st.session_state.get('run_simulation', False):
                      = {formatar_brasil(capacidade_ciclo_kg, 1)} kg × {ciclos_ano}
                      = {formatar_brasil(residuo_anual_kg, 0)} kg/ano
                      = {formatar_brasil(residuo_anual_ton, 1)} ton/ano
+        
+        Resíduos/dia = Resíduo anual ÷ 365 dias
+                     = {formatar_brasil(residuo_anual_kg, 0)} kg ÷ 365
+                     = {formatar_brasil(residuos_kg_dia, 1)} kg/dia
         ```
+        
+        **Cálculo das Emissões do Aterro (Baseline):**
+        - Metodologia: IPCC (2006) + Wang et al. (2017) + Feng et al. (2020)
+        - CH4: Modelo de decaimento exponencial + emissões pré-descarte
+        - N2O: Fatores de emissão específicos + perfil temporal
+        
+        **Cálculo das Emissões da Compostagem com Minhocas:**
+        - Metodologia: Yang et al. (2017)
+        - CH4: {CH4_C_FRAC_COMPOSTAGEM_MINHOCAS*100}% do TOC emitido como CH4-C
+        - N2O: {N2O_N_FRAC_COMPOSTAGEM_MINHOCAS*100}% do TN emitido como N2O-N
+        - Perfil temporal: 50 dias com distribuição específica
         
         **Cálculo das Emissões Evitadas:**
         ```
-        Emissões evitadas/ano = Resíduo anual × Fator emissão ÷ 1000
-                             = {formatar_brasil(residuo_anual_kg, 0)} kg × {fator_emissao} kg CO₂eq/kg ÷ 1000
-                             = {formatar_brasil(emissões_evitadas_ano)} tCO₂eq/ano
-        
-        Total evitado = Emissões evitadas/ano × Anos simulação
-                     = {formatar_brasil(emissões_evitadas_ano)} tCO₂eq/ano × {anos_simulacao} anos
-                     = {formatar_brasil(total_evitado_compostagem_minhocas)} tCO₂eq
+        Emissões evitadas = Emissões Aterro - Emissões Compostagem
+                         = {formatar_brasil(total_aterro_tco2eq.sum(), 1)} tCO₂eq - {formatar_brasil(total_compostagem_tco2eq.sum(), 1)} tCO₂eq
+                         = {formatar_brasil(total_evitado_compostagem_minhocas)} tCO₂eq
         ```
         
         **Cálculo do Valor Financeiro:**
@@ -491,7 +646,7 @@ if st.session_state.get('run_simulation', False):
         
         **📚 Base Científica:**
         - **Metodologia:** Compostagem com minhocas (Yang et al. 2017)
-        - **Fatores de emissão:** Baseados em estudos com Eisenia fetida
+        - **Aterro sanitário:** IPCC (2006), Wang et al. (2017), Feng et al. (2020)
         - **GWP:** IPCC AR6 (20 anos)
         - **Ciclo:** 50 dias (otimizado para minhocas californianas)
         """)
@@ -521,7 +676,9 @@ else:
     💡 **Configure o sistema de compostagem na barra lateral e clique em 'Executar Simulação Completa' para ver os resultados.**
     
     O simulador calculará:
-    - Capacidade total do sistema de compostagem com minhocas
+    - Capacidade total do sistema de compostagem
+    - Emissões detalhadas do cenário baseline (aterro)
+    - Emissões detalhadas da compostagem com minhocas
     - Emissões de gases de efeito estufa evitadas
     - Valor financeiro dos créditos de carbono
     - Projeção anual de resultados
@@ -530,40 +687,39 @@ else:
     """)
 
 # =============================================================================
-# INFORMAÇÕES ADICIONAIS - ATUALIZADA COM COMPOSTAGEM COM MINHOCAS
+# INFORMAÇÕES ADICIONAIS
 # =============================================================================
 
-with st.expander("📚 Sobre o Sistema de Compostagem com Minhocas"):
-    st.markdown(f"""
-    **🎯 Objetivo do Sistema:**
-    - Processar resíduos orgânicos das escolas (frutas, verduras, restaurantes)
-    - Produzir fertilizantes naturais (húmus e bio-wash) usando minhocas
-    - Gerar créditos de carbono através da compostagem com minhocas
-    - Educar alunos sobre sustentabilidade e vermicompostagem
+with st.expander("📚 Sobre a Metodologia de Cálculo"):
+    st.markdown("""
+    **🔬 Metodologia Científica:**
     
-    **⚙️ Especificações Técnicas:**
-    - **Reatores:** Caixas de {capacidade_reator}L com tampa
-    - **Minhocas:** Eisenia fetida (Californianas)
-    - **Substrato:** Serragem + folhas secas
-    - **Ciclo:** 50 dias (enchimento + processamento pelas minhocas)
-    - **Produtos:** Húmus (sólido) + Bio-wash (líquido)
+    **Compostagem com Minhocas (Yang et al. 2017):**
+    - **TOC (Carbono Orgânico Total):** {TOC_COMPOSTAGEM_MINHOCAS*100}% dos resíduos
+    - **TN (Nitrogênio Total):** {TN_COMPOSTAGEM_MINHOCAS*1000} g/kg dos resíduos  
+    - **CH4 emitido:** {CH4_C_FRAC_COMPOSTAGEM_MINHOCAS*100}% do TOC como CH4-C
+    - **N2O emitido:** {N2O_N_FRAC_COMPOSTAGEM_MINHOCAS*100}% do TN como N2O-N
+    - **Período:** 50 dias de compostagem
+    - **Perfil temporal:** Distribuição específica ao longo do processo
     
-    **📊 Capacidade de Processamento:**
-    - Cada reator de {capacidade_reator}L processa ~{formatar_brasil(capacidade_ciclo_kg/num_reatores, 1)} kg por ciclo
-    - Sistema com {num_reatores} reatores: ~{formatar_brasil(capacidade_ciclo_kg, 1)} kg por ciclo
-    - Com {ciclos_ano} ciclos/ano: ~{formatar_brasil(residuo_anual_kg, 0)} kg/ano
-    - Emissões evitadas: ~{formatar_brasil(emissões_evitadas_ano)} tCO₂eq/ano
+    **Cenário Baseline - Aterro Sanitário:**
+    - **Metodologia CH4:** IPCC (2006) - Modelo de decaimento exponencial
+    - **Metodologia N2O:** Wang et al. (2017) - Fatores de emissão
+    - **Emissões pré-descarte:** Feng et al. (2020)
+    - **Constante de decaimento (k):** {k_ano} por ano
     
-    **💰 Benefícios Financeiros:**
-    - Créditos de carbono comercializáveis
-    - Redução de custos com fertilizantes
-    - Economia na gestão de resíduos
-    - Potencial de receita com produtos da compostagem
+    **Parâmetros Globais:**
+    - **GWP CH4 (20 anos):** {GWP_CH4_20} (IPCC AR6)
+    - **GWP N2O (20 anos):** {GWP_N2O_20} (IPCC AR6)
+    - **Temperatura padrão:** {T}°C
+    - **DOC (Carbono Degradável):** {DOC*100}%
     
-    **🔬 Base Científica:**
-    - **Metodologia:** Yang et al. (2017) - Compostagem com minhocas
-    - **Eficiência:** Redução de 80-90% nas emissões vs aterro sanitário
-    - **Qualidade:** Produção de fertilizantes orgânicos de alta qualidade
+    **💡 Pressupostos do Modelo:**
+    - Sistema opera continuamente durante o período simulado
+    - Resíduos são processados imediatamente após geração
+    - Condições operacionais mantidas constantes
+    - Eficiência da compostagem com minhocas baseada em literatura
+    - Fatores de emissão específicos para resíduos alimentares
     """)
 
 # Rodapé
@@ -574,4 +730,5 @@ st.markdown("""
 
 **📞 Contato:** Secretaria Municipal de Educação - Ribeirão Preto  
 **🔬 Metodologia:** Compostagem com minhocas (Yang et al. 2017)
+**🌍 GWP:** IPCC AR6 (20 anos)
 """)
