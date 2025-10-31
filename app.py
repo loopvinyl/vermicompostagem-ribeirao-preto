@@ -17,6 +17,48 @@ st.title("♻️ Compostagem nas Escolas de Ribeirão Preto")
 st.markdown("**Monitoramento do sistema de compostagem com minhocas**")
 
 # =============================================================================
+# FUNÇÃO DE FORMATAÇÃO BRASILEIRA
+# =============================================================================
+
+def formatar_brasil(numero, casas_decimais=2, moeda=False, simbolo_moeda=""):
+    """
+    Formata números no padrão brasileiro (vírgula decimal e ponto milhar)
+    
+    Args:
+        numero: Número a ser formatado
+        casas_decimais: Número de casas decimais
+        moeda: Se True, formata como valor monetário
+        simbolo_moeda: Símbolo da moeda (R$, €, etc)
+    
+    Returns:
+        String formatada no padrão brasileiro
+    """
+    try:
+        if numero is None:
+            return "0,00"
+        
+        # Arredonda o número para as casas decimais especificadas
+        numero_arredondado = round(float(numero), casas_decimais)
+        
+        # Formata como string com separadores
+        formatado = f"{numero_arredondado:,.{casas_decimais}f}"
+        
+        # Substitui ponto por vírgula para decimal e vírgula por ponto para milhar
+        if casas_decimais > 0:
+            formatado = formatado.replace(",", "X").replace(".", ",").replace("X", ".")
+        else:
+            formatado = formatado.replace(",", ".")
+        
+        # Adiciona símbolo da moeda se especificado
+        if moeda and simbolo_moeda:
+            return f"{simbolo_moeda} {formatado}"
+        else:
+            return formatado
+            
+    except (ValueError, TypeError):
+        return "0,00"
+
+# =============================================================================
 # FUNÇÕES DE COTAÇÃO DO CARBONO (DO SEU SCRIPT)
 # =============================================================================
 
@@ -156,13 +198,13 @@ def exibir_cotacao_carbono():
 
     st.sidebar.metric(
         label=f"Preço do Carbono (tCO₂eq)",
-        value=f"{st.session_state.moeda_carbono} {st.session_state.preco_carbono:.2f}",
+        value=formatar_brasil(st.session_state.preco_carbono, moeda=True, simbolo_moeda=st.session_state.moeda_carbono),
         help=f"Fonte: {st.session_state.fonte_cotacao}"
     )
     
     st.sidebar.metric(
         label="Euro (EUR/BRL)",
-        value=f"{st.session_state.moeda_real} {st.session_state.taxa_cambio:.2f}",
+        value=formatar_brasil(st.session_state.taxa_cambio, moeda=True, simbolo_moeda=st.session_state.moeda_real),
         help="Cotação do Euro em Reais Brasileiros"
     )
     
@@ -170,7 +212,7 @@ def exibir_cotacao_carbono():
     
     st.sidebar.metric(
         label=f"Carbono em Reais (tCO₂eq)",
-        value=f"R$ {preco_carbono_reais:.2f}",
+        value=formatar_brasil(preco_carbono_reais, moeda=True, simbolo_moeda="R$"),
         help="Preço do carbono convertido para Reais Brasileiros"
     )
 
@@ -290,7 +332,7 @@ with st.sidebar:
     residuo_anual_kg = calcular_residuo_processado(capacidade_reator, num_reatores, ciclos_ano, densidade_residuo)
     residuo_anual_ton = residuo_anual_kg / 1000
     
-    st.info(f"**Resíduo processado:** {residuo_anual_ton:.1f} ton/ano")
+    st.info(f"**Resíduo processado:** {formatar_brasil(residuo_anual_ton, 1)} ton/ano")
     
     # Fator de emissão (configurável)
     st.subheader("🌱 Fator de Emissão")
@@ -306,7 +348,7 @@ with st.sidebar:
     # Cálculo das emissões evitadas
     emissões_evitadas_ano = calcular_emissoes_evitadas(residuo_anual_kg, fator_emissao)
     
-    st.success(f"**Emissões evitadas:** {emissões_evitadas_ano:.2f} tCO₂eq/ano")
+    st.success(f"**Emissões evitadas:** {formatar_brasil(emissões_evitadas_ano)} tCO₂eq/ano")
 
 # =============================================================================
 # CÁLCULO FINANCEIRO
@@ -338,26 +380,41 @@ col1, col2, col3 = st.columns(3)
 with col1:
     st.metric(
         "Emissões Evitadas Totais",
-        f"{emissoes_totais_evitadas:.1f} tCO₂eq",
+        f"{formatar_brasil(emissoes_totais_evitadas, 1)} tCO₂eq",
         f"Em {anos_projecao} anos"
     )
 
 with col2:
     st.metric(
         "Valor em Euros",
-        f"€ {valor_eur:,.2f}",
-        f"@ €{preco_carbono_eur:.2f}/tCO₂eq"
+        formatar_brasil(valor_eur, moeda=True, simbolo_moeda="€"),
+        f"@ {formatar_brasil(preco_carbono_eur, moeda=True, simbolo_moeda='€')}/tCO₂eq"
     )
 
 with col3:
+    preco_carbono_reais = preco_carbono_eur * taxa_cambio
     st.metric(
         "Valor em Reais", 
-        f"R$ {valor_brl:,.2f}",
-        f"@ R${preco_carbono_eur * taxa_cambio:.2f}/tCO₂eq"
+        formatar_brasil(valor_brl, moeda=True, simbolo_moeda="R$"),
+        f"@ {formatar_brasil(preco_carbono_reais, moeda=True, simbolo_moeda='R$')}/tCO₂eq"
     )
 
 # Detalhamento do cálculo
 st.subheader("📊 Detalhamento do Cálculo")
+
+# Formatar valores para exibição no dataframe
+valores_formatados = [
+    formatar_brasil(capacidade_reator, 0),
+    formatar_brasil(num_reatores, 0),
+    formatar_brasil(ciclos_ano, 0),
+    formatar_brasil(densidade_residuo, 2),
+    formatar_brasil(residuo_anual_ton, 1),
+    formatar_brasil(fator_emissao, 1),
+    formatar_brasil(emissões_evitadas_ano, 2),
+    formatar_brasil(anos_projecao, 0),
+    formatar_brasil(preco_carbono_eur, 2),
+    formatar_brasil(taxa_cambio, 2)
+]
 
 detalhes_df = pd.DataFrame({
     'Parâmetro': [
@@ -372,18 +429,7 @@ detalhes_df = pd.DataFrame({
         'Preço carbono (€/tCO₂eq)',
         'Taxa câmbio (EUR/BRL)'
     ],
-    'Valor': [
-        capacidade_reator,
-        num_reatores,
-        ciclos_ano,
-        densidade_residuo,
-        residuo_anual_ton,
-        fator_emissao,
-        emissões_evitadas_ano,
-        anos_projecao,
-        preco_carbono_eur,
-        taxa_cambio
-    ],
+    'Valor': valores_formatados,
     'Unidade': [
         'litros',
         'unidades',
@@ -411,26 +457,50 @@ for ano in range(1, anos_projecao + 1):
     
     projecao_anual.append({
         'Ano': ano,
-        'Emissões Evitadas Acumuladas (tCO₂eq)': emissoes_acumuladas,
-        'Valor Acumulado (€)': valor_eur_acumulado,
-        'Valor Acumulado (R$)': valor_brl_acumulado
+        'Emissões Evitadas Acumuladas (tCO₂eq)': formatar_brasil(emissoes_acumuladas, 1),
+        'Valor Acumulado (€)': formatar_brasil(valor_eur_acumulado, moeda=True, simbolo_moeda="€"),
+        'Valor Acumulado (R$)': formatar_brasil(valor_brl_acumulado, moeda=True, simbolo_moeda="R$")
     })
 
 projecao_df = pd.DataFrame(projecao_anual)
 st.dataframe(projecao_df, use_container_width=True)
 
-# Gráfico de projeção
+# Gráfico de projeção - precisa dos valores numéricos para o gráfico
+projecao_numerica = []
+for ano in range(1, anos_projecao + 1):
+    emissoes_acumuladas = emissões_evitadas_ano * ano
+    valor_brl_acumulado = calcular_valor_creditos(emissoes_acumuladas, preco_carbono_eur, "R$", taxa_cambio)
+    projecao_numerica.append({
+        'Ano': ano,
+        'Valor Acumulado (R$)': valor_brl_acumulado
+    })
+
+projecao_grafico_df = pd.DataFrame(projecao_numerica)
+
 fig = px.line(
-    projecao_df, 
+    projecao_grafico_df, 
     x='Ano', 
     y='Valor Acumulado (R$)',
     title='Projeção de Receita com Créditos de Carbono',
     markers=True
 )
+
+# Formatar o eixo Y no padrão brasileiro
 fig.update_layout(
     yaxis_title='Valor Acumulado (R$)',
-    xaxis_title='Ano'
+    xaxis_title='Ano',
+    yaxis=dict(
+        tickformat=',.2f',
+        tickmode='linear'
+    )
 )
+
+# Aplicar formatação brasileira nos ticks do eixo Y
+fig.update_yaxes(
+    tickformat=",.2f",
+    ticklabelmode="period"
+)
+
 st.plotly_chart(fig, use_container_width=True)
 
 # =============================================================================
@@ -445,38 +515,38 @@ with st.expander("ℹ️ Sobre os Cálculos"):
     ```
     Resíduo Anual (kg) = Capacidade Reator (L) × N° Reatores × Densidade (kg/L) × Ciclos/Ano
                        = {capacidade_reator} L × {num_reatores} × {densidade_residuo} kg/L × {ciclos_ano}
-                       = {residuo_anual_kg:,.0f} kg/ano = {residuo_anual_ton:.1f} ton/ano
+                       = {formatar_brasil(residuo_anual_kg, 0)} kg/ano = {formatar_brasil(residuo_anual_ton, 1)} ton/ano
     ```
     
     **2. Emissões Evitadas:**
     ```
     Emissões Evitadas (tCO₂eq/ano) = Resíduo Anual (kg) × Fator Emissão (kg CO₂eq/kg) ÷ 1000
-                                   = {residuo_anual_kg:,.0f} kg × {fator_emissao} kg CO₂eq/kg ÷ 1000
-                                   = {emissões_evitadas_ano:.2f} tCO₂eq/ano
+                                   = {formatar_brasil(residuo_anual_kg, 0)} kg × {fator_emissao} kg CO₂eq/kg ÷ 1000
+                                   = {formatar_brasil(emissões_evitadas_ano)} tCO₂eq/ano
     ```
     
     **3. Valor dos Créditos:**
     ```
     Valor (€) = Emissões Totais Evitadas (tCO₂eq) × Preço Carbono (€/tCO₂eq)
-              = {emissoes_totais_evitadas:.1f} tCO₂eq × €{preco_carbono_eur:.2f}/tCO₂eq
-              = €{valor_eur:,.2f}
+              = {formatar_brasil(emissoes_totais_evitadas, 1)} tCO₂eq × {formatar_brasil(preco_carbono_eur, moeda=True, simbolo_moeda='€')}/tCO₂eq
+              = {formatar_brasil(valor_eur, moeda=True, simbolo_moeda='€')}
               
     Valor (R$) = Valor (€) × Taxa Câmbio (R$/€)
-               = €{valor_eur:,.2f} × R${taxa_cambio:.2f}/€
-               = R${valor_brl:,.2f}
+               = {formatar_brasil(valor_eur, moeda=True, simbolo_moeda='€')} × {formatar_brasil(taxa_cambio, moeda=True, simbolo_moeda='R$')}/€
+               = {formatar_brasil(valor_brl, moeda=True, simbolo_moeda='R$')}
     ```
     
     **📚 Referências:**
     - Fator de emissão baseado em IPCC e metodologias de MDL
     - Preço do carbono baseado em EU ETS (mercado europeu)
-    - Densidade típica de resíduos orgânicos: 0.4-0.6 kg/L
+    - Densidade típica de resíduos orgânicos: 0,4-0,6 kg/L
     """)
 
 # =============================================================================
 # DOWNLOAD DOS RESULTADOS
 # =============================================================================
 
-# Criar DataFrame para download
+# Criar DataFrame para download (mantém valores numéricos originais)
 download_df = pd.DataFrame({
     'Ano': list(range(1, anos_projecao + 1)),
     'Emissões_Evitadas_tCO2eq': [emissões_evitadas_ano * ano for ano in range(1, anos_projecao + 1)],
@@ -485,7 +555,7 @@ download_df = pd.DataFrame({
 })
 
 # Botão de download
-csv = download_df.to_csv(index=False)
+csv = download_df.to_csv(index=False, decimal=',', sep=';')
 st.download_button(
     label="📥 Download da Projeção (CSV)",
     data=csv,
