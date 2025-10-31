@@ -25,21 +25,28 @@ st.markdown("""
 # INICIALIZAÇÃO DO SESSION STATE
 # =============================================================================
 
-# Inicializar variáveis de sessão se não existirem
-if 'cotacoes_carregadas' not in st.session_state:
-    st.session_state.cotacoes_carregadas = False
-if 'run_simulation' not in st.session_state:
-    st.session_state.run_simulation = False
-if 'preco_carbono' not in st.session_state:
-    st.session_state.preco_carbono = 85.50
-if 'moeda_carbono' not in st.session_state:
-    st.session_state.moeda_carbono = "€"
-if 'taxa_cambio' not in st.session_state:
-    st.session_state.taxa_cambio = 5.50
-if 'moeda_real' not in st.session_state:
-    st.session_state.moeda_real = "R$"
-if 'fonte_cotacao' not in st.session_state:
-    st.session_state.fonte_cotacao = "Referência"
+def inicializar_session_state():
+    if 'preco_carbono' not in st.session_state:
+        preco_carbono, moeda, contrato_info, sucesso, fonte = obter_cotacao_carbono()
+        st.session_state.preco_carbono = preco_carbono
+        st.session_state.moeda_carbono = moeda
+        st.session_state.fonte_cotacao = fonte
+        
+    if 'taxa_cambio' not in st.session_state:
+        preco_euro, moeda_real, sucesso_euro, fonte_euro = obter_cotacao_euro_real()
+        st.session_state.taxa_cambio = preco_euro
+        st.session_state.moeda_real = moeda_real
+        
+    if 'moeda_real' not in st.session_state:
+        st.session_state.moeda_real = "R$"
+    if 'cotacao_atualizada' not in st.session_state:
+        st.session_state.cotacao_atualizada = False
+    if 'mostrar_atualizacao' not in st.session_state:
+        st.session_state.mostrar_atualizacao = False
+    if 'cotacao_carregada' not in st.session_state:
+        st.session_state.cotacao_carregada = False
+    if 'run_simulation' not in st.session_state:
+        st.session_state.run_simulation = False
 
 # =============================================================================
 # FUNÇÃO DE FORMATAÇÃO BRASILEIRA
@@ -68,32 +75,108 @@ def formatar_brasil(numero, casas_decimais=2, moeda=False, simbolo_moeda=""):
         return "0,00"
 
 # =============================================================================
-# FUNÇÕES DE COTAÇÃO DO CARBONO
+# FUNÇÕES DE COTAÇÃO DO CARBONO (MELHORADAS)
 # =============================================================================
 
 def obter_cotacao_carbono_investing():
-    """
-    Obtém a cotação em tempo real do carbono - versão simplificada e robusta
-    """
     try:
-        # Para evitar problemas de scraping, usamos valores de referência
-        # Mas mantemos a estrutura para futuras implementações
-        return 85.50, "€", "Carbon Emissions Future", True, "Referência"
+        url = "https://www.investing.com/commodities/carbon-emissions"
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Referer': 'https://www.investing.com/'
+        }
+        
+        response = requests.get(url, headers=headers, timeout=15)
+        response.raise_for_status()
+        
+        soup = BeautifulSoup(response.content, 'html.parser')
+        
+        selectores = [
+            '[data-test="instrument-price-last"]',
+            '.text-2xl',
+            '.last-price-value',
+            '.instrument-price-last',
+            '.pid-1062510-last',
+            '.float_lang_base_1',
+            '.top.bold.inlineblock',
+            '#last_last'
+        ]
+        
+        preco = None
+        fonte = "Investing.com"
+        
+        for seletor in selectores:
+            try:
+                elemento = soup.select_one(seletor)
+                if elemento:
+                    texto_preco = elemento.text.strip().replace(',', '')
+                    texto_preco = ''.join(c for c in texto_preco if c.isdigit() or c == '.')
+                    if texto_preco:
+                        preco = float(texto_preco)
+                        break
+            except (ValueError, AttributeError):
+                continue
+        
+        if preco is not None:
+            return preco, "€", "Carbon Emissions Future", True, fonte
+        
+        import re
+        padroes_preco = [
+            r'"last":"([\d,]+)"',
+            r'data-last="([\d,]+)"',
+            r'last_price["\']?:\s*["\']?([\d,]+)',
+            r'value["\']?:\s*["\']?([\d,]+)'
+        ]
+        
+        html_texto = str(soup)
+        for padrao in padroes_preco:
+            matches = re.findall(padrao, html_texto)
+            for match in matches:
+                try:
+                    preco_texto = match.replace(',', '')
+                    preco = float(preco_texto)
+                    if 50 < preco < 200:
+                        return preco, "€", "Carbon Emissions Future", True, fonte
+                except ValueError:
+                    continue
+                    
+        return None, None, None, False, fonte
+        
     except Exception as e:
-        return 85.50, "€", "Carbon Emissions (Referência)", False, f"Referência - {str(e)}"
+        return None, None, None, False, f"Investing.com - Erro: {str(e)}"
 
 def obter_cotacao_carbono():
-    """Obtém a cotação do carbono"""
     preco, moeda, contrato_info, sucesso, fonte = obter_cotacao_carbono_investing()
-    return preco, moeda, f"{contrato_info}", True, fonte
+    
+    if sucesso:
+        return preco, moeda, f"{contrato_info}", True, fonte
+    
+    return 85.50, "€", "Carbon Emissions (Referência)", False, "Referência"
 
 def obter_cotacao_euro_real():
-    """Obtém a cotação do Euro em Reais"""
     try:
-        # Valor fixo para simplificar - poderia ser de API
-        return 5.50, "R$", True, "Referência"
+        url = "https://economia.awesomeapi.com.br/last/EUR-BRL"
+        response = requests.get(url, timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            cotacao = float(data['EURBRL']['bid'])
+            return cotacao, "R$", True, "AwesomeAPI"
     except:
-        return 5.50, "R$", False, "Referência"
+        pass
+    
+    try:
+        url = "https://api.exchangerate-api.com/v4/latest/EUR"
+        response = requests.get(url, timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            cotacao = data['rates']['BRL']
+            return cotacao, "R$", True, "ExchangeRate-API"
+    except:
+        pass
+    
+    return 5.50, "R$", False, "Referência"
 
 def calcular_valor_creditos(emissoes_evitadas_tco2eq, preco_carbono_por_tonelada, moeda, taxa_cambio=1):
     """Calcula o valor financeiro das emissões evitadas"""
@@ -104,50 +187,53 @@ def exibir_painel_cotacoes():
     
     st.sidebar.header("💰 Mercado de Carbono")
     
-    # Botão para atualizar cotações
+    if not st.session_state.get('cotacao_carregada', False):
+        st.session_state.mostrar_atualizacao = True
+        st.session_state.cotacao_carregada = True
+    
     col1, col2 = st.sidebar.columns([3, 1])
     with col1:
         if st.button("🔄 Atualizar Cotações", key="atualizar_cotacoes", use_container_width=True):
-            st.session_state.cotacoes_carregadas = False
+            st.session_state.cotacao_atualizada = True
+            st.session_state.mostrar_atualizacao = True
     
-    # Carregar cotações se necessário
-    if not st.session_state.cotacoes_carregadas:
-        # Usar st.empty() para criar um placeholder para loading
-        loading_placeholder = st.sidebar.empty()
-        loading_placeholder.info("🔄 Atualizando cotações...")
+    if st.session_state.get('mostrar_atualizacao', False):
+        st.sidebar.info("🔄 Atualizando cotações...")
         
-        preco_carbono, moeda_carbono, contrato_info, sucesso_carbono, fonte_carbono = obter_cotacao_carbono()
-        taxa_cambio, moeda_real, sucesso_euro, fonte_euro = obter_cotacao_euro_real()
+        preco_carbono, moeda, contrato_info, sucesso_carbono, fonte_carbono = obter_cotacao_carbono()
+        preco_euro, moeda_real, sucesso_euro, fonte_euro = obter_cotacao_euro_real()
         
-        # Armazenar em session state
         st.session_state.preco_carbono = preco_carbono
-        st.session_state.moeda_carbono = moeda_carbono
-        st.session_state.taxa_cambio = taxa_cambio
+        st.session_state.moeda_carbono = moeda
+        st.session_state.taxa_cambio = preco_euro
         st.session_state.moeda_real = moeda_real
         st.session_state.fonte_cotacao = fonte_carbono
-        st.session_state.cotacoes_carregadas = True
         
-        # Remover mensagem de loading
-        loading_placeholder.empty()
-    
-    # Exibir métricas de cotação
+        st.session_state.mostrar_atualizacao = False
+        st.session_state.cotacao_atualizada = False
+        
+        st.rerun()
+
+    preco_carbono_formatado = formatar_brasil(st.session_state.preco_carbono, 2)
+    taxa_cambio_formatada = formatar_brasil(st.session_state.taxa_cambio, 2)
+    preco_carbono_reais = st.session_state.preco_carbono * st.session_state.taxa_cambio
+    preco_carbono_reais_formatado = formatar_brasil(preco_carbono_reais, 2)
+
     st.sidebar.metric(
         label="Preço do Carbono (tCO₂eq)",
-        value=f"{st.session_state.moeda_carbono} {formatar_brasil(st.session_state.preco_carbono)}",
+        value=f"{st.session_state.moeda_carbono} {preco_carbono_formatado}",
         help=f"Fonte: {st.session_state.fonte_cotacao}"
     )
     
     st.sidebar.metric(
         label="Euro (EUR/BRL)",
-        value=f"{st.session_state.moeda_real} {formatar_brasil(st.session_state.taxa_cambio)}",
+        value=f"{st.session_state.moeda_real} {taxa_cambio_formatada}",
         help="Cotação do Euro em Reais"
     )
     
-    # Calcular e mostrar preço em Reais
-    preco_carbono_reais = st.session_state.preco_carbono * st.session_state.taxa_cambio
     st.sidebar.metric(
         label="Carbono em Reais (tCO₂eq)",
-        value=f"R$ {formatar_brasil(preco_carbono_reais)}",
+        value=f"R$ {preco_carbono_reais_formatado}",
         help="Preço do carbono convertido para Reais"
     )
     
@@ -155,9 +241,9 @@ def exibir_painel_cotacoes():
     with st.sidebar.expander("ℹ️ Sobre o Mercado"):
         st.markdown(f"""
         **📊 Cotações Atuais:**
-        - **Carbono:** {st.session_state.moeda_carbono} {formatar_brasil(st.session_state.preco_carbono)}/tCO₂eq
-        - **Câmbio:** 1 Euro = {st.session_state.moeda_real} {formatar_brasil(st.session_state.taxa_cambio)}
-        - **Carbono em R$:** R$ {formatar_brasil(preco_carbono_reais)}/tCO₂eq
+        - **Carbono:** {st.session_state.moeda_carbono} {preco_carbono_formatado}/tCO₂eq
+        - **Câmbio:** 1 Euro = {st.session_state.moeda_real} {taxa_cambio_formatada}
+        - **Carbono em R$:** R$ {preco_carbono_reais_formatado}/tCO₂eq
         
         **🌍 Mercado de Referência:**
         - European Union Allowances (EUA)
@@ -173,6 +259,9 @@ def exibir_painel_cotacoes():
 # =============================================================================
 # CONFIGURAÇÃO DO SISTEMA
 # =============================================================================
+
+# Inicializar session state primeiro
+inicializar_session_state()
 
 # Exibir painel de cotações primeiro
 exibir_painel_cotacoes()
@@ -230,7 +319,7 @@ with st.sidebar:
     anos_simulacao = st.selectbox(
         "Duração do projeto",
         options=[4, 8, 12, 16, 20],
-        index=0,  # Alterado de 2 para 0 - padrão 4 anos
+        index=0,  # Padrão 4 anos
         help="Período típico para projetos escolares"
     )
     
@@ -504,7 +593,7 @@ st.markdown("---")
 st.markdown("""
 <div style="text-align: center">
     <h4>🏫 Sistema de Compostagem com Minhocas - Ribeirão Preto/SP</h4>
-    <p><strong>Compostagem com minhocas</strong> • Desenvolvido para projetos de sustentabilidade escolar</p>
-    <p><em>Metodologia: Yang et al. (2017) • GWP: IPCC AR6 • Mercado: EU ETS</em></p>
+    <p><strong>Secretaria Municipal de Educação</strong> • Desenvolvido para projetos de sustentabilidade escolar</p>
+    <p><em>Metodologia: Compostagem com minhocas (Yang et al. 2017) • GWP: IPCC AR6 • Mercado: EU ETS</em></p>
 </div>
 """, unsafe_allow_html=True)
