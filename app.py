@@ -784,7 +784,7 @@ if st.session_state.get('run_simulation', False):
         
         projecao_data.append({
             'Ano': ano,
-            'Emissões Evitadas (tCO₂eq)': formatar_brasil(acumulado_emissoes, 1),
+            'Emissões Evitadas Acumuladas (tCO₂eq)': formatar_brasil(acumulado_emissoes, 1),
             'Valor (€)': formatar_brasil(acumulado_valor_eur, moeda=True, simbolo_moeda="€"),
             'Valor (R$)': formatar_brasil(acumulado_valor_brl, moeda=True, simbolo_moeda="R$")
         })
