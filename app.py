@@ -73,7 +73,7 @@ def formatar_brasil(numero, casas_decimais=2, moeda=False, simbolo_moeda=""):
         return "0,00"
 
 # =============================================================================
-# FUNÇões de cotação do carbono (melhoradas)
+# FUNÇÕES de cotação do carbono (melhoradas)
 # =============================================================================
 
 def obter_cotacao_carbono_investing():
@@ -267,6 +267,26 @@ def exibir_painel_cotacoes():
         """)
 
 # =============================================================================
+# PARÂMETROS TÉCNICOS FIXOS (ATUALIZADOS COM DOCf VARIÁVEL)
+# =============================================================================
+
+# Parâmetros para cálculos de emissões (baseados em literatura científica)
+T = 25  # Temperatura média
+
+# Cálculo do DOCf baseado na temperatura (equação do segundo script)
+DOCf_val = 0.0147 * T + 0.28
+
+# Compostagem com minhocas (Yang et al. 2017)
+TOC_COMPOSTAGEM_MINHOCAS = 0.436
+TN_COMPOSTAGEM_MINHOCAS = 14.2 / 1000
+CH4_C_FRAC_COMPOSTAGEM_MINHOCAS = 0.13 / 100
+N2O_N_FRAC_COMPOSTAGEM_MINHOCAS = 0.92 / 100
+
+# GWP (IPCC AR6)
+GWP_CH4_20 = 79.7
+GWP_N2O_20 = 273
+
+# =============================================================================
 # CONFIGURAÇÃO DO SISTEMA
 # =============================================================================
 
@@ -382,24 +402,7 @@ with col3:
     """)
 
 # =============================================================================
-# PARÂMETROS TÉCNICOS FIXOS
-# =============================================================================
-
-# Parâmetros para cálculos de emissões (baseados em literatura científica)
-T = 25  # Temperatura média
-
-# Compostagem com minhocas (Yang et al. 2017)
-TOC_COMPOSTAGEM_MINHOCAS = 0.436
-TN_COMPOSTAGEM_MINHOCAS = 14.2 / 1000
-CH4_C_FRAC_COMPOSTAGEM_MINHOCAS = 0.13 / 100
-N2O_N_FRAC_COMPOSTAGEM_MINHOCAS = 0.92 / 100
-
-# GWP (IPCC AR6)
-GWP_CH4_20 = 79.7
-GWP_N2O_20 = 273
-
-# =============================================================================
-# CÁLCULOS BASEADOS EM IPCC
+# CÁLCULOS BASEADOS EM IPCC (ATUALIZADOS)
 # =============================================================================
 
 def calcular_emissoes_compostagem_minhocas(residuos_kg_dia_param):
@@ -422,10 +425,10 @@ def calcular_emissoes_compostagem_minhocas(residuos_kg_dia_param):
     return emissões_tco2eq_ano
 
 def calcular_emissoes_aterro(residuo_anual_kg_param):
-    """Calcula emissões do aterro baseado em metodologia IPCC"""
+    """Calcula emissões do aterro baseado em metodologia IPCC com DOCf variável"""
     # Parâmetros baseados em IPCC 2006 Waste Model e literatura científica
     DOC = 0.15  # Carbono orgânico degradável (IPCC padrão para resíduos alimentares)
-    DOC_f = 0.5  # Fração de DOC que realmente se decompõe
+    DOC_f = DOCf_val  # AGORA USANDO A EQUAÇÃO DO SEGUNDO SCRIPT
     F = 0.5      # Fração de CH4 no biogás
     MCF = 1.0    # Fator de correção de metano para aterros managed (IPCC)
     OX = 0.1     # Fator de oxidação
@@ -453,9 +456,9 @@ def calcular_detalhes_emissoes(residuo_anual_kg_param, residuos_kg_dia_param):
     umidade = 0.85
     fracao_ms = 1 - umidade
     
-    # CÁLCULO DETALHADO DO ATERRO (IPCC)
+    # CÁLCULO DETALHADO DO ATERRO (IPCC) - COM DOCf VARIÁVEL
     DOC = 0.15
-    DOC_f = 0.5
+    DOC_f = DOCf_val  # AGORA USANDO A EQUAÇÃO
     F = 0.5
     MCF = 1.0
     OX = 0.1
@@ -512,11 +515,12 @@ def calcular_detalhes_emissoes(residuo_anual_kg_param, residuos_kg_dia_param):
             'GWP_CH4': GWP_CH4_20,
             'GWP_N2O': GWP_N2O_20,
             'DOC': DOC,
-            'DOC_f': DOC_f,
+            'DOC_f': DOC_f,  # AGORA MOSTRANDO O VALOR CALCULADO
             'F': F,
             'MCF': MCF,
             'OX': OX,
-            'fator_N2O_aterro': fator_N2O_aterro
+            'fator_N2O_aterro': fator_N2O_aterro,
+            'temperatura': T  # ADICIONANDO A TEMPERATURA USADA
         }
     }
 
@@ -592,7 +596,7 @@ if st.session_state.get('run_simulation', False):
             - **Fonte:** Painel Intergovernamental sobre Mudanças Climáticas
             - **Parâmetros IPCC:**
               • DOC (Carbono Orgânico Degradável): 15%
-              • DOC_f (Fração Decomposta): 50%
+              • DOCf (Fração Decomposta): Calculado por DOCf = 0.0147 × T + 0.28
               • F (Fração CH₄ no Biogás): 50%
               • MCF (Fator Correção Metano): 1.0
               • OX (Oxidação): 10%
@@ -601,8 +605,11 @@ if st.session_state.get('run_simulation', False):
             st.markdown(f"""
             **Cálculo CH₄ Aterro:**
             ```
-            CH₄ potencial = Resíduo × DOC × DOC_f × F × (16/12) × MCF × (1-OX)
-            CH₄ potencial = {formatar_brasil(residuo_anual_kg, 1)} × {detalhes['parametros']['DOC']} × {detalhes['parametros']['DOC_f']} × {detalhes['parametros']['F']} × 1,333 × {detalhes['parametros']['MCF']} × 0,9
+            DOCf = 0.0147 × T + 0.28
+            DOCf = 0.0147 × {detalhes['parametros']['temperatura']} + 0.28 = {formatar_brasil(detalhes['parametros']['DOC_f'], 3)}
+
+            CH₄ potencial = Resíduo × DOC × DOCf × F × (16/12) × MCF × (1-OX)
+            CH₄ potencial = {formatar_brasil(residuo_anual_kg, 1)} × {detalhes['parametros']['DOC']} × {formatar_brasil(detalhes['parametros']['DOC_f'], 3)} × {detalhes['parametros']['F']} × 1,333 × {detalhes['parametros']['MCF']} × 0,9
             CH₄ potencial = {formatar_brasil(detalhes['aterro']['potencial_CH4_kg'], 1)} kg CH₄/ano
             
             CH₄ em CO₂eq = {formatar_brasil(detalhes['aterro']['potencial_CH4_kg'], 1)} × {detalhes['parametros']['GWP_CH4']}
@@ -812,7 +819,7 @@ else:
 # =============================================================================
 
 with st.expander("📚 Sobre a Metodologia"):
-    st.markdown("""
+    st.markdown(f"""
     **🔬 Base Científica:**
     
     **Compostagem com Minhocas (Yang et al. 2017):**
@@ -824,7 +831,8 @@ with st.expander("📚 Sobre a Metodologia"):
     **Cenário de Referência (Aterro) - IPCC:**
     - **Metodologia:** IPCC 2006 Waste Model
     - **DOC (Carbono Orgânico Degradável):** 15% para resíduos alimentares
-    - **DOC_f (Fração Decomposta):** 50% 
+    - **DOCf (Fração Decomposta):** Calculado por DOCf = 0.0147 × T + 0.28
+    - **DOCf calculado:** {formatar_brasil(DOCf_val, 3)} (para T = {T}°C)
     - **F (Fração CH₄ no Biogás):** 50%
     - **MCF (Fator Correção Metano):** 1.0 para aterros gerenciados
     - **OX (Oxidação):** 10%
